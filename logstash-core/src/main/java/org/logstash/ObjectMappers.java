@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;
+
+import org.jcodings.specific.UTF8Encoding;
 import org.jruby.RubyBignum;
 import org.jruby.RubyBoolean;
 import org.jruby.RubyFixnum;
@@ -121,7 +123,9 @@ public final class ObjectMappers {
         @Override
         public RubyString deserialize(final JsonParser p, final DeserializationContext ctxt)
             throws IOException {
-            return RubyString.newString(RubyUtil.RUBY, p.getBinaryValue());
+
+            final ByteList byteList = new ByteList(p.getBinaryValue(), UTF8Encoding.INSTANCE);
+            return RubyString.newString(RubyUtil.RUBY, byteList);
         }
     }
 

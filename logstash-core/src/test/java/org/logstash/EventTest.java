@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.jruby.RubyString;
 import org.jruby.RubySymbol;
 import org.jruby.RubyTime;
 import org.jruby.java.proxies.ConcreteJavaProxy;
@@ -81,6 +82,18 @@ public final class EventTest {
         assertEquals(timestamp, er.getField("time"));
         assertEquals(list, er.getField("list"));
         assertEquals(e.getTimestamp().toString(), er.getTimestamp().toString());
+    }
+
+    @Test
+    public void toBinaryRoundtripNonAscii() throws Exception {
+        Event e = new Event();
+        e.setField("foo", "bör");
+        final RubyString before = (RubyString) e.getUnconvertedField("foo");
+        Event er = Event.deserialize(e.serialize());
+        assertEquals(before, er.getUnconvertedField("foo"));
+        assertEquals(
+                before.getEncoding(), ((RubyString)er.getUnconvertedField("foo")).getEncoding()
+        );
     }
 
     /**
