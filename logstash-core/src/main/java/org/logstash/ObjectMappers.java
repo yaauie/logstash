@@ -18,7 +18,12 @@ import com.fasterxml.jackson.dataformat.cbor.CBORGenerator;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+
+import org.jcodings.Encoding;
+import org.jcodings.specific.ASCIIEncoding;
+import org.jcodings.specific.UTF8Encoding;
 import org.jruby.RubyBignum;
 import org.jruby.RubyBoolean;
 import org.jruby.RubyFixnum;
@@ -106,8 +111,17 @@ public final class ObjectMappers {
             final WritableTypeId typeId =
                 typeSer.typeId(value, RubyString.class, JsonToken.VALUE_STRING);
             typeSer.writeTypePrefix(jgen, typeId);
-            final ByteList bytes = value.getByteList();
-            jgen.writeBinary(bytes.getUnsafeBytes(), 0, bytes.length());
+            final Encoding encoding = value.getEncoding();
+            if (encoding.equals(ASCIIEncoding.INSTANCE)) {
+                final ByteList bytes = value.getByteList();
+                jgen.writeBinary(bytes.getUnsafeBytes(), 0, bytes.length());
+            } else if (encoding.equals(UTF8Encoding.INSTANCE)) {
+                final ByteList bytes = value.getByteList();
+                jgen.writeUTF8String(bytes.getUnsafeBytes(), 0, bytes.length());
+            } else {
+                final byte[] utf8Bytes = value.asJavaString().getBytes(StandardCharsets.UTF_8);
+                jgen.writeUTF8String(utf8Bytes, 0, utf8Bytes.length);
+            }
             typeSer.writeTypeSuffix(jgen, typeId);
         }
     }
@@ -121,7 +135,16 @@ public final class ObjectMappers {
         @Override
         public RubyString deserialize(final JsonParser p, final DeserializationContext ctxt)
             throws IOException {
-            return RubyString.newString(RubyUtil.RUBY, p.getBinaryValue());
+
+            final JsonToken currentToken = p.getCurrentToken();
+            switch (currentToken) {
+                case VALUE_STRING:
+                    return RubyString.newString(RubyUtil.RUBY, p.getValueAsString());
+                case VALUE_EMBEDDED_OBJECT:
+                    return RubyString.newString(RubyUtil.RUBY, p.getBinaryValue());
+                default:
+                    throw new IllegalStateException(String.format("Unexpected token: `%s`", currentToken));
+            }
         }
     }
 
