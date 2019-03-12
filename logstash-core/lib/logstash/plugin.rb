@@ -54,6 +54,8 @@ class LogStash::Plugin
     # The id should always be defined normally, but in tests that might not be the case
     # In the future we may make this more strict in the Plugin API
     @params["id"] ||= "#{self.class.config_name}_#{SecureRandom.uuid}"
+
+    @_id = LogStash::Util::SubstitutionVariables.replace_placeholders(@params['id']).freeze
   end
 
   # Return a uniq ID for this plugin configuration, by default
@@ -63,7 +65,7 @@ class LogStash::Plugin
   #
   # @return [String] A plugin ID
   def id
-    @params["id"]
+    @_id
   end
 
   # close is called during shutdown, after the plugin worker

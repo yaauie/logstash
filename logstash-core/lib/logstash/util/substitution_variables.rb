@@ -3,6 +3,7 @@
 java_import "org.logstash.secret.store.SecretStoreExt"
 
 module ::LogStash::Util::SubstitutionVariables
+  extend self
 
   include LogStash::Util::Loggable
 

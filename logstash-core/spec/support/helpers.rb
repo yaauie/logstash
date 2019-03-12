@@ -22,6 +22,27 @@ def clear_data_dir
   end
 end
 
+##
+# Runs the provided block with the given ENV overrides,
+# returning the result and restoring ENV when complete.
+#
+# @param override_kv [Hash{String=>String}]: environment variables to set for the execution of the block
+#                                            values explicitly provided as `nil` are _removed_ from the ENV.
+# @yield
+# @return [Object] the result of the provided block
+def with_env_override(override_kv)
+  backup = override_kv.each_with_object({}) do |(k,v), memo|
+    memo[k] = ENV.fetch(k) if ENV.include?(k)
+    v.nil? ? ENV.delete(k) : ENV.store(k, v)
+  end
+
+  yield
+
+ensure
+  override_kv.each {|k,_| ENV.delete(k) }
+  backup.each { |k,v| ENV[k]=v }
+end
+
 def mock_settings(settings_values={})
   settings = LogStash::SETTINGS.clone
 

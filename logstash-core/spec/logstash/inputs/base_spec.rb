@@ -114,3 +114,13 @@ describe "LogStash::Inputs::Base#fix_streaming_codecs" do
     expect(tcp.codec.charset).to eq("CP1252")
   end
 end
+
+describe 'environment variable expansion' do
+  let(:env_override) { Hash['FOO'=>'BAR'] }
+  around(:each) { |example| with_env_override(env_override, &example) }
+
+  it 'expands the environment variables in provided id' do
+    input = LogStash::Inputs::NOOP.new('id' => 'THIS-${FOO}-THAT')
+    expect(input.id).to eq('THIS-BAR-THAT')
+  end
+end
