@@ -41,11 +41,16 @@ module ::LogStash::Util::SubstitutionVariables
       default = Regexp.last_match(:default)
       logger.debug("Replacing `#{placeholder}` with actual value")
 
-      #check the secret store if it exists
-      secret_store = SecretStoreExt.getIfExists(LogStash::SETTINGS.get_setting("keystore.file").value, LogStash::SETTINGS.get_setting("keystore.classname").value)
-      replacement = secret_store.nil? ? nil : secret_store.retrieveSecret(SecretStoreExt.getStoreId(name))
-      #check the environment
-      replacement = ENV.fetch(name, default) if replacement.nil?
+      # check environment first, falling through to the secret store if it is not present.
+      replacement = ENV.fetch(name) do
+        secret_store = SecretStoreExt.getIfExists(LogStash::SETTINGS.get_setting("keystore.file").value, LogStash::SETTINGS.get_setting("keystore.classname").value)
+        secret_store && secret_store.retrieveSecret(SecretStoreExt.getStoreId(name))
+      end
+
+      # if we don't have a value, attempt to apply the default value
+      replacement = default if replacement.nil? && !default.nil?
+
+      # if it's still nil, we cannot reasonably recover
       if replacement.nil?
         raise LogStash::ConfigurationError, "Cannot evaluate `#{placeholder}`. Replacement variable `#{name}` is not defined in a Logstash secret store " +
             "or as an Environment entry and there is no default value given."
