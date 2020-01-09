@@ -79,6 +79,16 @@ public final class CompiledPipeline {
      */
     private final RubyIntegration.PluginFactory pluginFactory;
 
+    /**
+     * Per pipeline compiled classes cache shared across threads {@link CompiledExecution}
+     */
+    private final Map<String, Class<? extends Dataset>> datasetClassCache = new HashMap<>(500);
+
+    /**
+     * First, constructor time, compilation of the pipeline that will warm
+     * the {@link CompiledPipeline#datasetClassCache} in a thread safe way
+     * before the concurrent per worker threads {@link CompiledExecution} compilations
+     */
     private CompiledExecution warmedCompiledExecution;
 
     public CompiledPipeline(
@@ -100,6 +110,8 @@ public final class CompiledPipeline {
             filters = setupFilters(cve);
             outputs = setupOutputs(cve);
 
+            // invoke a first compilation to warm the class cache which will prevent
+            // redundant compilations for each subsequent worker {@link CompiledExecution}
             warmedCompiledExecution = new CompiledPipeline.CompiledExecution();
         } catch (Exception e) {
             throw new IllegalStateException("Unable to configure plugins: " + e.getMessage());
@@ -125,6 +137,8 @@ public final class CompiledPipeline {
      */
     public Dataset buildExecution() {
         synchronized (this) {
+            // the first worker get the warmed CompiledExecution and the other
+            // get their own.
             if (warmedCompiledExecution != null) {
                 final CompiledExecution result = warmedCompiledExecution;
                 warmedCompiledExecution = null;
@@ -282,8 +296,6 @@ public final class CompiledPipeline {
         return outputs.containsKey(vertex.getId());
     }
 
-    private final Map<String, Class<? extends Dataset>> datasetClassCache = new HashMap<>(500);
-
     /**
      * Instances of this class represent a fully compiled pipeline execution. Note that this class
      * has a separate lifecycle from {@link CompiledPipeline} because it holds per (worker-thread)
@@ -366,7 +378,9 @@ public final class CompiledPipeline {
             final String vertexId = vertex.getId();
 
             if (!plugins.containsKey(vertexId)) {
-                final ComputeStepSyntaxElement<Dataset> prepared = DatasetCompiler.filterDataset(flatten(datasets, vertex), filters.get(vertexId));
+                final ComputeStepSyntaxElement<Dataset> prepared = DatasetCompiler.filterDataset(
+                    flatten(datasets, vertex),
+                    filters.get(vertexId));
 
                 Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
                 if (clazz == null) {
@@ -393,7 +407,10 @@ public final class CompiledPipeline {
             final String vertexId = vertex.getId();
 
             if (!plugins.containsKey(vertexId)) {
-                final ComputeStepSyntaxElement<Dataset> prepared = DatasetCompiler.outputDataset(flatten(datasets, vertex), outputs.get(vertexId), outputs.size() == 1);
+                final ComputeStepSyntaxElement<Dataset> prepared = DatasetCompiler.outputDataset(
+                    flatten(datasets, vertex),
+                    outputs.get(vertexId),
+                    outputs.size() == 1);
 
                 Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
                 if (clazz == null) {
@@ -419,31 +436,27 @@ public final class CompiledPipeline {
          */
         private SplitDataset split(final Collection<Dataset> datasets,
             final EventCondition condition, final Vertex vertex) {
-            final String key = vertex.getId();
-
-            SplitDataset conditional = iffs.get(key);
+            final String vertexId = vertex.getId();
+            SplitDataset conditional = iffs.get(vertexId);
 
             if (conditional == null) {
                 final Collection<Dataset> dependencies = flatten(datasets, vertex);
-                conditional = iffs.get(key);
+                conditional = iffs.get(vertexId);
                 // Check that compiling the dependencies did not already instantiate the conditional
                 // by requiring its else branch.
                 if (conditional == null) {
                     final ComputeStepSyntaxElement<SplitDataset> prepared = DatasetCompiler.splitDataset(dependencies, condition);
 
-                    Class<? extends Dataset> clazz = datasetClassCache.get(key);
+                    Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
                     if (clazz == null) {
                         clazz = prepared.compile();
-                        datasetClassCache.put(key, clazz);
+                        datasetClassCache.put(vertexId, clazz);
                     }
 
+                    LOGGER.debug("Compiled conditional\n {} \n into \n {}", vertex, prepared);
+
                     conditional = prepared.instantiate(clazz);
-
-                    LOGGER.debug(
-                        "Compiled conditional\n {} \n into \n {}", vertex, prepared
-                    );
-
-                    iffs.put(key, conditional);
+                    iffs.put(vertexId, conditional);
                 }
             }
 

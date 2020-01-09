@@ -21,11 +21,10 @@ public final class DatasetCompilerTest {
     @Test
     public void compilesOutputDataset() {
         final ComputeStepSyntaxElement<Dataset> prepared = DatasetCompiler.outputDataset(
-                Collections.emptyList(),
-                PipelineTestUtil.buildOutput(events -> {}),
-                true
+            Collections.emptyList(),
+            PipelineTestUtil.buildOutput(events -> {}),
+            true
         );
-
         assertThat(
             prepared.instantiate(prepared.compile()).compute(RubyUtil.RUBY.newArray(), false, false),
             nullValue()

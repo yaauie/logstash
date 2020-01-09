@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -32,10 +33,9 @@ public final class ComputeStepSyntaxElement<T extends Dataset> {
     private static final ISimpleCompiler COMPILER = new SimpleCompiler();
 
     /**
-     * Cache of runtime compiled classes to prevent duplicate classes being compiled.
+     * Sequential counter to generate the class name
      */
-    private static final Map<ComputeStepSyntaxElement<?>, Class<? extends Dataset>> CLASS_CACHE
-        = new HashMap<>();
+    private static final AtomicLong classSeqCount = new AtomicLong();
 
     /**
      * Pattern to remove redundant {@code ;} from formatted code since {@link Formatter} does not
@@ -49,6 +49,8 @@ public final class ComputeStepSyntaxElement<T extends Dataset> {
 
     private final Class<T> type;
 
+    private final long classSeq;
+
     public static <T extends Dataset> ComputeStepSyntaxElement<T> create(
         final Iterable<MethodSyntaxElement> methods, final ClassFields fields,
         final Class<T> interfce) {
@@ -60,6 +62,7 @@ public final class ComputeStepSyntaxElement<T extends Dataset> {
         this.methods = methods;
         this.fields = fields;
         type = interfce;
+        classSeq = classSeqCount.incrementAndGet();
     }
 
     @SuppressWarnings("unchecked")
@@ -78,30 +81,25 @@ public final class ComputeStepSyntaxElement<T extends Dataset> {
         synchronized (COMPILER) {
             try {
                 final Class<? extends Dataset> clazz;
-                if (CLASS_CACHE.containsKey(this)) {
-                    clazz = CLASS_CACHE.get(this);
+                final String name = String.format("CompiledDataset%d", classSeq);
+                final String code = generateCode(name);
+                if (SOURCE_DIR != null) {
+                    final Path sourceFile = SOURCE_DIR.resolve(String.format("%s.java", name));
+                    Files.write(sourceFile, code.getBytes(StandardCharsets.UTF_8));
+                    COMPILER.cookFile(sourceFile.toFile());
                 } else {
-                    final String name = String.format("CompiledDataset%d", CLASS_CACHE.size());
-                    final String code = generateCode(name);
-                    if (SOURCE_DIR != null) {
-                        final Path sourceFile = SOURCE_DIR.resolve(String.format("%s.java", name));
-                        Files.write(sourceFile, code.getBytes(StandardCharsets.UTF_8));
-                        COMPILER.cookFile(sourceFile.toFile());
-                    } else {
-                        COMPILER.cook(code);
-                    }
-                    COMPILER.setParentClassLoader(COMPILER.getClassLoader());
-                    clazz = (Class<? extends Dataset>)COMPILER.getClassLoader().loadClass(
-                            String.format("org.logstash.generated.%s", name)
-                    );
-                    CLASS_CACHE.put(this, clazz);
+                    COMPILER.cook(code);
                 }
+                COMPILER.setParentClassLoader(COMPILER.getClassLoader());
+                clazz = (Class<? extends Dataset>)COMPILER.getClassLoader().loadClass(
+                        String.format("org.logstash.generated.%s", name)
+                );
+
                 return clazz;
             } catch (final CompileException | ClassNotFoundException | IOException ex) {
                 throw new IllegalStateException(ex);
             }
         }
-
     }
 
     @Override
