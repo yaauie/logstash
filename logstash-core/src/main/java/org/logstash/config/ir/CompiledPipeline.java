@@ -35,6 +35,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -82,7 +83,7 @@ public final class CompiledPipeline {
     /**
      * Per pipeline compiled classes cache shared across threads {@link CompiledExecution}
      */
-    private final Map<String, Class<? extends Dataset>> datasetClassCache = new HashMap<>(500);
+    private final Map<String, Class<? extends Dataset>> datasetClassCache = new ConcurrentHashMap<>(500);
 
     /**
      * First, constructor time, compilation of the pipeline that will warm
@@ -336,7 +337,7 @@ public final class CompiledPipeline {
                 return Dataset.IDENTITY;
             } else {
                 return terminalDataset(outputNodes.stream().map(
-                        leaf -> outputDataset(leaf, flatten(Collections.emptyList(), leaf))
+                    leaf -> outputDataset(leaf, flatten(Collections.emptyList(), leaf))
                 ).collect(Collectors.toList()));
             }
         }
