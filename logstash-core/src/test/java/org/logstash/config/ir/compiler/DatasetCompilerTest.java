@@ -27,7 +27,7 @@ public final class DatasetCompilerTest {
         );
 
         assertThat(
-            prepared.instantiate(prepared.cook()).compute(RubyUtil.RUBY.newArray(), false, false),
+            prepared.instantiate(prepared.compile()).compute(RubyUtil.RUBY.newArray(), false, false),
             nullValue()
         );
     }
@@ -38,7 +38,7 @@ public final class DatasetCompilerTest {
         final ComputeStepSyntaxElement<SplitDataset> prepared = DatasetCompiler.splitDataset(
             Collections.emptyList(), event -> event.getEvent().includes(key)
         );
-        final SplitDataset left = prepared.instantiate(prepared.cook());
+        final SplitDataset left = prepared.instantiate(prepared.compile());
         final Event trueEvent = new Event();
         trueEvent.setField(key, "val");
         final JrubyEventExtLibrary.RubyEvent falseEvent =

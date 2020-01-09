@@ -72,7 +72,7 @@ public final class ComputeStepSyntaxElement<T extends Dataset> {
     }
 
     @SuppressWarnings("unchecked")
-    public Class<? extends Dataset> cook() {
+    public Class<? extends Dataset> compile() {
         // We need to globally synchronize to avoid concurrency issues with the internal class
         // loader and the CLASS_CACHE
         synchronized (COMPILER) {

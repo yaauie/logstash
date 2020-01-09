@@ -79,7 +79,7 @@ public final class CompiledPipeline {
      */
     private final RubyIntegration.PluginFactory pluginFactory;
 
-    private CompiledExecution compiledExecution;
+    private CompiledExecution warmedCompiledExecution;
 
     public CompiledPipeline(
             final PipelineIR pipelineIR,
@@ -99,16 +99,11 @@ public final class CompiledPipeline {
             inputs = setupInputs(cve);
             filters = setupFilters(cve);
             outputs = setupOutputs(cve);
+
+            warmedCompiledExecution = new CompiledPipeline.CompiledExecution();
         } catch (Exception e) {
             throw new IllegalStateException("Unable to configure plugins: " + e.getMessage());
         }
-
-//        this.compiledExecution = null;
-        cookedCache = new HashMap<>(500);
-        preparedPluginsCache = new HashMap<>(500);
-        preparedIffsCache = new HashMap<>(500);
-
-        System.out.println("***** CompiledPipeline");
     }
 
     public Collection<AbstractOutputDelegatorExt> outputs() {
@@ -128,16 +123,15 @@ public final class CompiledPipeline {
      * underlying pipeline from the Queue to the outputs.
      * @return Compiled {@link Dataset} representation of the underlying {@link PipelineIR} topology
      */
-    public synchronized Dataset buildExecution() {
-        System.out.println("******* buildExecution");
+    public Dataset buildExecution() {
+        synchronized (this) {
+            if (warmedCompiledExecution != null) {
+                final CompiledExecution result = warmedCompiledExecution;
+                warmedCompiledExecution = null;
+                return result.toDataset();
+            }
+        }
         return new CompiledPipeline.CompiledExecution().toDataset();
-
-//        if (this.compiledExecution == null) {
-//            this.compiledExecution = new CompiledPipeline.CompiledExecution();
-//            return this.compiledExecution.toDataset();
-//        } else {
-//            return this.compiledExecution.copy().toDataset();
-//        }
     }
 
     /**
@@ -288,10 +282,7 @@ public final class CompiledPipeline {
         return outputs.containsKey(vertex.getId());
     }
 
-
-    private Map<String, Class<? extends Dataset>> cookedCache;
-    private Map<String, ComputeStepSyntaxElement<Dataset>> preparedPluginsCache;
-    private Map<String, ComputeStepSyntaxElement<SplitDataset>> preparedIffsCache;
+    private final Map<String, Class<? extends Dataset>> datasetClassCache = new HashMap<>(500);
 
     /**
      * Instances of this class represent a fully compiled pipeline execution. Note that this class
@@ -305,7 +296,6 @@ public final class CompiledPipeline {
          */
         private final Map<String, SplitDataset> iffs = new HashMap<>(50);
 
-
         /**
          * Cached {@link Dataset} compiled from {@link PluginVertex} indexed by their ID as returned
          * by {@link Vertex#getId()} to avoid duplicate computations.
@@ -315,7 +305,7 @@ public final class CompiledPipeline {
         private final Dataset compiled;
 
         CompiledExecution() {
-            this.compiled = compile();
+            compiled = compile();
         }
 
         Dataset toDataset() {
@@ -333,10 +323,9 @@ public final class CompiledPipeline {
             if (outputNodes.isEmpty()) {
                 return Dataset.IDENTITY;
             } else {
-                Dataset d = terminalDataset(outputNodes.stream().map(
+                return terminalDataset(outputNodes.stream().map(
                         leaf -> outputDataset(leaf, flatten(Collections.emptyList(), leaf))
                 ).collect(Collectors.toList()));
-                return d;
             }
         }
         /**
@@ -353,7 +342,7 @@ public final class CompiledPipeline {
             final Dataset result;
             if (count > 1) {
                 ComputeStepSyntaxElement<Dataset> prepared = DatasetCompiler.terminalDataset(parents);
-                result = prepared.instantiate(prepared.cook());
+                result = prepared.instantiate(prepared.compile());
             } else if (count == 1) {
                 // No need for a terminal dataset here, if there is only a single parent node we can
                 // call it directly.
@@ -377,36 +366,20 @@ public final class CompiledPipeline {
             final String vertexId = vertex.getId();
 
             if (!plugins.containsKey(vertexId)) {
-                ComputeStepSyntaxElement<Dataset> prepared;
-                prepared = DatasetCompiler.filterDataset(flatten(datasets, vertex), filters.get(vertexId));
+                final ComputeStepSyntaxElement<Dataset> prepared = DatasetCompiler.filterDataset(flatten(datasets, vertex), filters.get(vertexId));
 
-//                if (preparedPluginsCache.containsKey(vertexId)) {
-//                    prepared = preparedPluginsCache.get(vertexId);
-//                } else {
-//                    prepared = DatasetCompiler.filterDataset(flatten(datasets, vertex), filters.get(vertexId));
-//                    preparedPluginsCache.put(vertexId, prepared);
-//                }
-//
-                Class<? extends Dataset> cooked;
-                if (cookedCache.containsKey(vertexId)) {
-                    cooked = cookedCache.get(vertexId);
-                } else {
-                    cooked = prepared.cook();
-                    cookedCache.put(vertexId, cooked);
+                Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
+                if (clazz == null) {
+                    clazz = prepared.compile();
+                    datasetClassCache.put(vertexId, clazz);
                 }
 
                 LOGGER.debug("Compiled filter\n {} \n into \n {}", vertex, prepared);
 
-                plugins.put(vertexId, prepared.instantiate(cooked));
-                System.out.println("***** COOKING filter " + vertexId);
-            } else {
-                System.out.println("***** NOT cooking filter " + vertexId);
+                plugins.put(vertexId, prepared.instantiate(clazz));
             }
 
             return plugins.get(vertexId);
-
-//            final ComputeStepSyntaxElement<Dataset> prepared = plugins.get(vertexId);
-//            return prepared.instantiate(prepared.cook());
         }
 
         /**
@@ -420,36 +393,20 @@ public final class CompiledPipeline {
             final String vertexId = vertex.getId();
 
             if (!plugins.containsKey(vertexId)) {
-                ComputeStepSyntaxElement<Dataset> prepared;
-                prepared = DatasetCompiler.outputDataset(flatten(datasets, vertex), outputs.get(vertexId), outputs.size() == 1);
+                final ComputeStepSyntaxElement<Dataset> prepared = DatasetCompiler.outputDataset(flatten(datasets, vertex), outputs.get(vertexId), outputs.size() == 1);
 
-//                if (preparedPluginsCache.containsKey(vertexId)) {
-//                    prepared = preparedPluginsCache.get(vertexId);
-//                } else {
-//                    prepared = DatasetCompiler.outputDataset(flatten(datasets, vertex), outputs.get(vertexId), outputs.size() == 1);
-//                    preparedPluginsCache.put(vertexId, prepared);
-//                }
-
-                Class<? extends Dataset> cooked;
-                if (cookedCache.containsKey(vertexId)) {
-                    cooked = cookedCache.get(vertexId);
-                } else {
-                    cooked = prepared.cook();
-                    cookedCache.put(vertexId, cooked);
+                Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
+                if (clazz == null) {
+                    clazz = prepared.compile();
+                    datasetClassCache.put(vertexId, clazz);
                 }
 
                 LOGGER.debug("Compiled output\n {} \n into \n {}", vertex, prepared);
 
-                plugins.put(vertexId, prepared.instantiate(cooked));
-                System.out.println("***** COOKING output " + vertexId);
-            } else {
-                System.out.println("***** NOT cooking output " + vertexId);
-            }
+                plugins.put(vertexId, prepared.instantiate(clazz));
+             }
 
             return plugins.get(vertexId);
-
-//            final ComputeStepSyntaxElement<Dataset> prepared = plugins.get(vertexId);
-//            return prepared.instantiate(prepared.cook());
         }
 
         /**
@@ -464,7 +421,6 @@ public final class CompiledPipeline {
             final EventCondition condition, final Vertex vertex) {
             final String key = vertex.getId();
 
-//            ComputeStepSyntaxElement<SplitDataset> prepared = iffs.get(key);
             SplitDataset conditional = iffs.get(key);
 
             if (conditional == null) {
@@ -473,37 +429,22 @@ public final class CompiledPipeline {
                 // Check that compiling the dependencies did not already instantiate the conditional
                 // by requiring its else branch.
                 if (conditional == null) {
-                    ComputeStepSyntaxElement<SplitDataset> prepared;
-                    prepared = DatasetCompiler.splitDataset(dependencies, condition);
+                    final ComputeStepSyntaxElement<SplitDataset> prepared = DatasetCompiler.splitDataset(dependencies, condition);
 
-//                    if (preparedIffsCache.containsKey(key)) {
-//                        prepared = preparedIffsCache.get(key);
-//                    } else {
-//                        prepared = DatasetCompiler.splitDataset(dependencies, condition);
-//                        preparedIffsCache.put(key, prepared);
-//                    }
-
-                    Class<? extends Dataset> cooked;
-                    if (cookedCache.containsKey(key)) {
-                        cooked = cookedCache.get(key);
-                    } else {
-                        cooked = prepared.cook();
-                        cookedCache.put(key, cooked);
+                    Class<? extends Dataset> clazz = datasetClassCache.get(key);
+                    if (clazz == null) {
+                        clazz = prepared.compile();
+                        datasetClassCache.put(key, clazz);
                     }
 
-                    conditional = prepared.instantiate(cooked);
+                    conditional = prepared.instantiate(clazz);
 
                     LOGGER.debug(
                         "Compiled conditional\n {} \n into \n {}", vertex, prepared
                     );
 
                     iffs.put(key, conditional);
-                    System.out.println("***** COOKING conditional " + key);
-                } else {
-                    System.out.println("***** NOT cooking conditional " + key);
                 }
-            } else {
-                System.out.println("***** NOT cooking conditional " + key);
             }
 
             return conditional;

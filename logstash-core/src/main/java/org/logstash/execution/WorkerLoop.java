@@ -43,9 +43,7 @@ public final class WorkerLoop implements Runnable {
         final AtomicBoolean shutdownRequested, final boolean drainQueue) {
         this.consumedCounter = consumedCounter;
         this.filteredCounter = filteredCounter;
-        LOGGER.debug("***** before buildExecution");
         this.execution = pipeline.buildExecution();
-        LOGGER.debug("***** after buildExecution");
         this.drainQueue = drainQueue;
         this.readClient = readClient;
         this.flushRequested = flushRequested;

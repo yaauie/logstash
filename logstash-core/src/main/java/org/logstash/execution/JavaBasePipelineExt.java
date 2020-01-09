@@ -45,7 +45,6 @@ public final class JavaBasePipelineExt extends AbstractPipelineExt {
     public JavaBasePipelineExt initialize(final ThreadContext context, final IRubyObject[] args)
         throws IncompleteSourceWithMetadataException, NoSuchAlgorithmException {
         initialize(context, args[0], args[1], args[2]);
-        LOGGER.debug("***** before new CompiledPipeline");
         lirExecution = new CompiledPipeline(
             lir,
             new PluginFactoryExt.Plugins(context.runtime, RubyUtil.PLUGIN_FACTORY_CLASS).init(
@@ -60,7 +59,6 @@ public final class JavaBasePipelineExt extends AbstractPipelineExt {
             ),
             getSecretStore(context)
         );
-        LOGGER.debug("***** after new CompiledPipeline");
         inputs = RubyArray.newArray(context.runtime, lirExecution.inputs());
         filters = RubyArray.newArray(context.runtime, lirExecution.filters());
         outputs = RubyArray.newArray(context.runtime, lirExecution.outputs());
