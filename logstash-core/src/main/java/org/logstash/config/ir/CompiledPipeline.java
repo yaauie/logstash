@@ -350,7 +350,7 @@ public final class CompiledPipeline {
          * @param parents Parent {@link Dataset} to sum and terminate
          * @return Dataset representing the sum of given parent {@link Dataset}
          */
-        public synchronized Dataset terminalDataset(final Collection<Dataset> parents) {
+        public Dataset terminalDataset(final Collection<Dataset> parents) {
             final int count = parents.size();
             final Dataset result;
             if (count > 1) {
