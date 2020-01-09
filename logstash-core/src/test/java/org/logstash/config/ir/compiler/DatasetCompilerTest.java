@@ -20,12 +20,14 @@ public final class DatasetCompilerTest {
      */
     @Test
     public void compilesOutputDataset() {
-        assertThat(
-            DatasetCompiler.outputDataset(
+        final ComputeStepSyntaxElement<Dataset> prepared = DatasetCompiler.outputDataset(
                 Collections.emptyList(),
                 PipelineTestUtil.buildOutput(events -> {}),
                 true
-            ).instantiate().compute(RubyUtil.RUBY.newArray(), false, false),
+        );
+
+        assertThat(
+            prepared.instantiate(prepared.cook()).compute(RubyUtil.RUBY.newArray(), false, false),
             nullValue()
         );
     }
@@ -33,9 +35,10 @@ public final class DatasetCompilerTest {
     @Test
     public void compilesSplitDataset() {
         final FieldReference key = FieldReference.from("foo");
-        final SplitDataset left = DatasetCompiler.splitDataset(
+        final ComputeStepSyntaxElement<SplitDataset> prepared = DatasetCompiler.splitDataset(
             Collections.emptyList(), event -> event.getEvent().includes(key)
-        ).instantiate();
+        );
+        final SplitDataset left = prepared.instantiate(prepared.cook());
         final Event trueEvent = new Event();
         trueEvent.setField(key, "val");
         final JrubyEventExtLibrary.RubyEvent falseEvent =

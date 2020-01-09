@@ -3,7 +3,7 @@ package org.logstash.config.ir.compiler;
 /**
  * An instance that can methods can be invoked on.
  */
-interface ValueSyntaxElement extends MethodLevelSyntaxElement {
+public interface ValueSyntaxElement extends MethodLevelSyntaxElement {
 
     /**
      * Call method on instance.

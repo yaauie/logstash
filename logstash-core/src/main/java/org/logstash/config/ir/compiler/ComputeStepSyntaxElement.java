@@ -63,7 +63,16 @@ public final class ComputeStepSyntaxElement<T extends Dataset> {
     }
 
     @SuppressWarnings("unchecked")
-    public T instantiate() {
+    public T instantiate(Class<? extends Dataset> clazz) {
+        try {
+            return (T) clazz.<T>getConstructor(Map.class).newInstance(ctorArguments());
+        } catch (final NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Class<? extends Dataset> cook() {
         // We need to globally synchronize to avoid concurrency issues with the internal class
         // loader and the CLASS_CACHE
         synchronized (COMPILER) {
@@ -82,18 +91,17 @@ public final class ComputeStepSyntaxElement<T extends Dataset> {
                         COMPILER.cook(code);
                     }
                     COMPILER.setParentClassLoader(COMPILER.getClassLoader());
-                    clazz = (Class<T>) COMPILER.getClassLoader().loadClass(
-                        String.format("org.logstash.generated.%s", name)
+                    clazz = (Class<? extends Dataset>)COMPILER.getClassLoader().loadClass(
+                            String.format("org.logstash.generated.%s", name)
                     );
                     CLASS_CACHE.put(this, clazz);
                 }
-                return (T) clazz.<T>getConstructor(Map.class).newInstance(ctorArguments());
-            } catch (final CompileException | ClassNotFoundException | IOException
-                | NoSuchMethodException | InvocationTargetException | InstantiationException
-                | IllegalAccessException ex) {
+                return clazz;
+            } catch (final CompileException | ClassNotFoundException | IOException ex) {
                 throw new IllegalStateException(ex);
             }
         }
+
     }
 
     @Override

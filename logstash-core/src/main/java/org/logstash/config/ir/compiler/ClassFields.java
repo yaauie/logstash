@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
  * All fields in a Java class. Manages correctly naming and typing fields to avoid collisions and
  * manual naming in generated code.
  */
-final class ClassFields {
+public final class ClassFields {
 
     private final Collection<FieldDefinition> definitions = new ArrayList<>();
 
