@@ -298,6 +298,17 @@ public final class CompiledPipeline {
     }
 
     /**
+     * Returns an existing compiled dataset class implementation for the given {@code vertexId},
+     * or compiles one from the provided {@code computeStepSyntaxElement}.
+     * @param vertexId a string uniquely identifying a {@link Vertex} within the current pipeline
+     * @param computeStepSyntaxElement the source from which to compile a dataset class
+     * @return an implementation of {@link Dataset} for the given vertex
+     */
+    private Class<? extends Dataset> getDatasetClass(final String vertexId, final ComputeStepSyntaxElement<? extends Dataset> computeStepSyntaxElement) {
+        return datasetClassCache.computeIfAbsent(vertexId, _vid -> computeStepSyntaxElement.compile());
+    }
+
+    /**
      * Instances of this class represent a fully compiled pipeline execution. Note that this class
      * has a separate lifecycle from {@link CompiledPipeline} because it holds per (worker-thread)
      * state and thus needs to be instantiated once per thread.
@@ -383,11 +394,7 @@ public final class CompiledPipeline {
                     flatten(datasets, vertex),
                     filters.get(vertexId));
 
-                Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
-                if (clazz == null) {
-                    clazz = prepared.compile();
-                    datasetClassCache.put(vertexId, clazz);
-                }
+                Class<? extends Dataset> clazz = getDatasetClass(vertexId, prepared);
 
                 LOGGER.debug("Compiled filter\n {} \n into \n {}", vertex, prepared);
 
@@ -413,11 +420,7 @@ public final class CompiledPipeline {
                     outputs.get(vertexId),
                     outputs.size() == 1);
 
-                Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
-                if (clazz == null) {
-                    clazz = prepared.compile();
-                    datasetClassCache.put(vertexId, clazz);
-                }
+                Class<? extends Dataset> clazz = getDatasetClass(vertexId, prepared);
 
                 LOGGER.debug("Compiled output\n {} \n into \n {}", vertex, prepared);
 
@@ -448,11 +451,7 @@ public final class CompiledPipeline {
                 if (conditional == null) {
                     final ComputeStepSyntaxElement<SplitDataset> prepared = DatasetCompiler.splitDataset(dependencies, condition);
 
-                    Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
-                    if (clazz == null) {
-                        clazz = prepared.compile();
-                        datasetClassCache.put(vertexId, clazz);
-                    }
+                    Class<? extends Dataset> clazz = getDatasetClass(vertexId, prepared);
 
                     LOGGER.debug("Compiled conditional\n {} \n into \n {}", vertex, prepared);
 
