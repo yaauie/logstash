@@ -16,7 +16,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.codehaus.commons.compiler.CompileException;
-import org.codehaus.commons.compiler.ISimpleCompiler;
 import org.codehaus.janino.Scanner;
 import org.codehaus.janino.SimpleCompiler;
 
@@ -29,8 +28,6 @@ public final class ComputeStepSyntaxElement<T extends Dataset> {
         new VariableDefinition(Map.class, "arguments");
 
     private static final Path SOURCE_DIR = debugDir();
-
-    private static final ISimpleCompiler COMPILER = new SimpleCompiler();
 
     /**
      * Sequential counter to generate the class name
@@ -76,29 +73,25 @@ public final class ComputeStepSyntaxElement<T extends Dataset> {
 
     @SuppressWarnings("unchecked")
     public Class<? extends Dataset> compile() {
-        // We need to globally synchronize to avoid concurrency issues with the internal class
-        // loader and the CLASS_CACHE
-        synchronized (COMPILER) {
-            try {
-                final Class<? extends Dataset> clazz;
-                final String name = String.format("CompiledDataset%d", classSeq);
-                final String code = generateCode(name);
-                if (SOURCE_DIR != null) {
-                    final Path sourceFile = SOURCE_DIR.resolve(String.format("%s.java", name));
-                    Files.write(sourceFile, code.getBytes(StandardCharsets.UTF_8));
-                    COMPILER.cookFile(sourceFile.toFile());
-                } else {
-                    COMPILER.cook(code);
-                }
-                COMPILER.setParentClassLoader(COMPILER.getClassLoader());
-                clazz = (Class<? extends Dataset>)COMPILER.getClassLoader().loadClass(
-                        String.format("org.logstash.generated.%s", name)
-                );
-
-                return clazz;
-            } catch (final CompileException | ClassNotFoundException | IOException ex) {
-                throw new IllegalStateException(ex);
+        try {
+            final Class<? extends Dataset> clazz;
+            final String name = String.format("CompiledDataset%d", classSeq);
+            final String code = generateCode(name);
+            final SimpleCompiler compiler = new SimpleCompiler();
+            if (SOURCE_DIR != null) {
+                final Path sourceFile = SOURCE_DIR.resolve(String.format("%s.java", name));
+                Files.write(sourceFile, code.getBytes(StandardCharsets.UTF_8));
+                compiler.cookFile(sourceFile.toFile());
+            } else {
+                compiler.cook(code);
             }
+            clazz = (Class<? extends Dataset>)compiler.getClassLoader().loadClass(
+                    String.format("org.logstash.generated.%s", name)
+            );
+
+            return clazz;
+        } catch (final CompileException | ClassNotFoundException | IOException ex) {
+            throw new IllegalStateException(ex);
         }
     }
 
