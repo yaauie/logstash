@@ -1,6 +1,8 @@
 package org.logstash.config.ir;
 
 import co.elastic.logstash.api.Codec;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jruby.RubyArray;
@@ -35,7 +37,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -83,7 +85,7 @@ public final class CompiledPipeline {
     /**
      * Per pipeline compiled classes cache shared across threads {@link CompiledExecution}
      */
-    private final Map<String, Class<? extends Dataset>> datasetClassCache = new ConcurrentHashMap<>(500);
+    private final Cache<String, Class<? extends Dataset>> datasetClassCache = CacheBuilder.newBuilder().initialCapacity(500).build();
 
     /**
      * First, constructor time, compilation of the pipeline that will warm
@@ -298,6 +300,21 @@ public final class CompiledPipeline {
     }
 
     /**
+     * Returns an existing compiled dataset class implementation for the given {@code vertexId},
+     * or compiles one from the provided {@code computeStepSyntaxElement}.
+     * @param vertexId a string uniquely identifying a {@link Vertex} within the current pipeline
+     * @param computeStepSyntaxElement the source from which to compile a dataset class
+     * @return an implementation of {@link Dataset} for the given vertex
+     */
+    private Class<? extends Dataset> getDatasetClass(final String vertexId, final ComputeStepSyntaxElement<? extends Dataset> computeStepSyntaxElement) {
+        try {
+            return datasetClassCache.get(vertexId, computeStepSyntaxElement::compile);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("Failed to compile dataset class", e);
+        }
+    }
+
+    /**
      * Instances of this class represent a fully compiled pipeline execution. Note that this class
      * has a separate lifecycle from {@link CompiledPipeline} because it holds per (worker-thread)
      * state and thus needs to be instantiated once per thread.
@@ -383,11 +400,7 @@ public final class CompiledPipeline {
                     flatten(datasets, vertex),
                     filters.get(vertexId));
 
-                Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
-                if (clazz == null) {
-                    clazz = prepared.compile();
-                    datasetClassCache.put(vertexId, clazz);
-                }
+                Class<? extends Dataset> clazz = getDatasetClass(vertexId, prepared);
 
                 LOGGER.debug("Compiled filter\n {} \n into \n {}", vertex, prepared);
 
@@ -413,11 +426,7 @@ public final class CompiledPipeline {
                     outputs.get(vertexId),
                     outputs.size() == 1);
 
-                Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
-                if (clazz == null) {
-                    clazz = prepared.compile();
-                    datasetClassCache.put(vertexId, clazz);
-                }
+                Class<? extends Dataset> clazz = getDatasetClass(vertexId, prepared);
 
                 LOGGER.debug("Compiled output\n {} \n into \n {}", vertex, prepared);
 
@@ -448,11 +457,7 @@ public final class CompiledPipeline {
                 if (conditional == null) {
                     final ComputeStepSyntaxElement<SplitDataset> prepared = DatasetCompiler.splitDataset(dependencies, condition);
 
-                    Class<? extends Dataset> clazz = datasetClassCache.get(vertexId);
-                    if (clazz == null) {
-                        clazz = prepared.compile();
-                        datasetClassCache.put(vertexId, clazz);
-                    }
+                    Class<? extends Dataset> clazz = getDatasetClass(vertexId, prepared);
 
                     LOGGER.debug("Compiled conditional\n {} \n into \n {}", vertex, prepared);
 
