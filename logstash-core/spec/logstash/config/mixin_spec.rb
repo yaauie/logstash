@@ -127,7 +127,11 @@ describe LogStash::Config::Mixin do
     let(:strings) { ["I am a", "modern major general"] }
     let(:required_strings) { ["required", "strings"] }
 
-    subject { klass.new("uris" => uris, "strings" => strings, "required_strings" => required_strings) }
+    let(:config) do
+      {"uris" => uris, "strings" => strings, "required_strings" => required_strings}
+    end
+
+    subject(:instance) { klass.new(config) }
 
     it "a URI list should return an array of URIs" do
       expect(subject.uris).to match_array(safe_uris)
@@ -135,6 +139,18 @@ describe LogStash::Config::Mixin do
 
     it "a string list should return an array of strings" do
       expect(subject.strings).to match_array(strings)
+    end
+
+    context 'a URI list with entries containing whitespace-separated URIs' do
+      let(:config) { super().merge("uris" => uris.join(' ')) }
+      before(:each) do
+        # ensure that we actually instantiate it with our modified `config`,
+        # since `secure_params!` mutates the `original_params`.
+        expect(klass).to receive(:new).with(a_hash_including("uris" => uris.join(' '))).and_call_original
+      end
+      it "should return an array of URIs" do
+        expect(instance.uris).to match_array(safe_uris)
+      end
     end
 
     context "with a scalar value" do
