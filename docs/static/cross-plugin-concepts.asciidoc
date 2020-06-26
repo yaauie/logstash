@@ -1,0 +1,17 @@
+[[plugin-concepts]]
+=== Cross-plugin concepts and features
+
+New section for concepts, features, and behaviors that apply to multiple plugins.
+
+[[space-delimiters]]
+==== Space-deliminated URIs on list-type params
+
+Since whitespace is illegal in URIs, you can use it as a delimiter when
+validating list-type URI params. This option enables the expansion of an
+arbitrary list of URIs from a single Environment- or Keystore-variable.
+
+Examples of plugins and options that use this functionality:
+
+* <<plugins-inputs-elasticsearch-hosts,Elasticsearch input plugin - `hosts`>>
+* <<plugins-outputs-elasticsearch-hosts,Elasticsearch output plugin - `hosts`>>
+* <<plugins-filters-elasticsearch-hosts,Elasticsearch filter plugin - `hosts`>>
