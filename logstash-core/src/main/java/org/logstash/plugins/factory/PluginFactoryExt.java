@@ -55,13 +55,11 @@ public final class PluginFactoryExt extends RubyBasicObject
     public static IRubyObject filterDelegator(final ThreadContext context,
                                               final IRubyObject recv, final IRubyObject... args) {
         final RubyHash arguments = (RubyHash) args[2];
-        final IRubyObject filterInstance = args[1].callMethod(context, "new", arguments);
         final RubyString id = (RubyString) arguments.op_aref(context, ID_KEY);
-        filterInstance.callMethod(
-                context, "metric=",
-                ((AbstractMetricExt) args[3]).namespace(context, id.intern())
-        );
-        filterInstance.callMethod(context, "execution_context=", args[4]);
+        final IRubyObject namespacedMetric = ((AbstractMetricExt) args[3]).namespace(context, id.intern());
+        final IRubyObject filterFactory = args[1].callMethod(context, "instance_factory", new IRubyObject[]{args[4], namespacedMetric});
+        final IRubyObject filterInstance = filterFactory.callMethod(context, "create", arguments);
+
         return new FilterDelegatorExt(context.runtime, RubyUtil.FILTER_DELEGATOR_CLASS)
                 .initialize(context, filterInstance, id);
     }
@@ -201,11 +199,13 @@ public final class PluginFactoryExt extends RubyBasicObject
                         context, null,
                         filterClass, klass, rubyArgs, typeScopedMetric, executionCntx);
             } else {
-                final IRubyObject pluginInstance = klass.callMethod(context, "new", rubyArgs);
-                final AbstractNamespacedMetricExt scopedMetric = typeScopedMetric.namespace(context, RubyUtil.RUBY.newSymbol(id));
-                scopedMetric.gauge(context, MetricKeys.NAME_KEY, pluginInstance.callMethod(context, "config_name"));
-                pluginInstance.callMethod(context, "metric=", scopedMetric);
-                pluginInstance.callMethod(context, "execution_context=", executionCntx);
+                final AbstractNamespacedMetricExt namespacedMetric = typeScopedMetric.namespace(context, RubyUtil.RUBY.newSymbol(id));
+                namespacedMetric.gauge(context, MetricKeys.NAME_KEY, klass.callMethod(context, "config_name"));
+
+                final IRubyObject pluginFactory = klass.callMethod(context, "instance_factory", new IRubyObject[]{executionCntx, namespacedMetric});
+
+                final IRubyObject pluginInstance = pluginFactory.callMethod(context, "create", rubyArgs);
+
                 return pluginInstance;
             }
         } else {

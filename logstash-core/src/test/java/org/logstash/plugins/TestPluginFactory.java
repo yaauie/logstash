@@ -60,6 +60,6 @@ public class TestPluginFactory implements RubyIntegration.PluginFactory {
 
     @Override
     public Codec buildDefaultCodec(String codecName) {
-        return new Line(new ConfigurationImpl(Collections.emptyMap()), new ContextImpl(null, null));
+        return new Line(new ConfigurationImpl(Collections.emptyMap()), ContextImpl.NULL_INSTANCE);
     }
 }

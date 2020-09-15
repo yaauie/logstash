@@ -61,6 +61,9 @@ class LogStash::Plugin
   end
 
   def initialize(params=nil)
+    self.execution_context = InstanceFactory.instance_scoped_execution_context
+    self.metric = InstanceFactory.instance_scoped_metric
+    metric.gauge("name", config_name)
     @logger = self.logger
     @deprecation_logger = self.deprecation_logger
     # need to access settings statically because plugins are initialized in config_ast with no context.
@@ -73,6 +76,59 @@ class LogStash::Plugin
     # The id should always be defined normally, but in tests that might not be the case
     # In the future we may make this more strict in the Plugin API
     @params["id"] ||= "#{self.class.config_name}_#{SecureRandom.uuid}"
+  end
+
+  def self.instance_factory(instance_scoped_execution_context, instance_scoped_metric)
+    proxy = InstanceFactory.new(self, instance_scoped_execution_context, instance_scoped_metric)
+
+    return proxy unless block_given?
+
+    yield(proxy)
+  end
+
+  class InstanceFactory
+    MUTEX = Mutex.new
+    EXCLUSIONS = Hash.new
+
+    attr_reader :instance_scoped_execution_context
+    attr_reader :instance_scoped_metric
+
+    def initialize(plugin_klass, instance_scoped_execution_context, instance_scoped_metric)
+      MUTEX.synchronize { EXCLUSIONS[plugin_klass] ||= Mutex.new }
+      @plugin_klass = plugin_klass
+      @instance_scoped_execution_context = instance_scoped_execution_context
+      @instance_scoped_metric = instance_scoped_metric
+    end
+
+    def create(*args, &block)
+      EXCLUSIONS[@plugin_klass].synchronize do
+        begin
+          previous_plugin_instance_factory = Thread.current[:plugin_instance_factory]
+          Thread.current[:plugin_instance_factory] = self
+          @plugin_klass.new(*args, &block)
+        ensure
+          Thread.current[:plugin_instance_factory] = previous_plugin_instance_factory
+        end
+      end
+    end
+
+    def lock_held?
+      EXCLUSIONS[@plugin_klass].owned?
+    end
+
+    def self.instance_scoped_execution_context
+      instance_factory = Thread.current[:plugin_instance_factory]
+      return nil unless instance_factory && instance_factory.lock_held?
+
+      instance_factory.instance_scoped_execution_context
+    end
+
+    def self.instance_scoped_metric
+      instance_factory = Thread.current[:plugin_instance_factory]
+      return nil unless instance_factory && instance_factory.lock_held?
+
+      instance_factory.instance_scoped_metric
+    end
   end
 
   # Return a uniq ID for this plugin configuration, by default

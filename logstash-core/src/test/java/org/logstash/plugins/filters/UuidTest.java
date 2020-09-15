@@ -43,7 +43,7 @@ public class UuidTest {
     public void testUuidWithoutRequiredConfigThrows() {
         try {
             Configuration config = new ConfigurationImpl(Collections.emptyMap());
-            Uuid uuid = new Uuid(ID, config, new ContextImpl(null, null));
+            Uuid uuid = new Uuid(ID, config, ContextImpl.NULL_INSTANCE);
             PluginUtil.validateConfig(uuid, config);
             Assert.fail("java-uuid filter without required config should have thrown exception");
         } catch (IllegalStateException ex) {
@@ -60,7 +60,7 @@ public class UuidTest {
         Map<String, Object> rawConfig = new HashMap<>();
         rawConfig.put(Uuid.TARGET_CONFIG.name(), targetField);
         Configuration config = new ConfigurationImpl(rawConfig);
-        Uuid uuid = new Uuid(ID, config, new ContextImpl(null, null));
+        Uuid uuid = new Uuid(ID, config, ContextImpl.NULL_INSTANCE);
         PluginUtil.validateConfig(uuid, config);
 
         org.logstash.Event e = new org.logstash.Event();
@@ -81,7 +81,7 @@ public class UuidTest {
         rawConfig.put(Uuid.TARGET_CONFIG.name(), targetField);
         rawConfig.put(Uuid.OVERWRITE_CONFIG.name(), true);
         Configuration config = new ConfigurationImpl(rawConfig);
-        Uuid uuid = new Uuid(ID, config, new ContextImpl(null, null));
+        Uuid uuid = new Uuid(ID, config, ContextImpl.NULL_INSTANCE);
         PluginUtil.validateConfig(uuid, config);
 
         org.logstash.Event e = new org.logstash.Event();

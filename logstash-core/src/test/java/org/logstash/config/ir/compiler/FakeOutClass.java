@@ -28,12 +28,45 @@ import org.jruby.anno.JRubyMethod;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import static org.logstash.RubyUtil.RUBY;
 
 @SuppressWarnings("serial")
 @JRubyClass(name = "FakeOutClass")
 public class FakeOutClass extends RubyObject {
+    @JRubyClass(name = "InstanceFactory")
+    public static class InstanceFactory extends RubyObject {
+        private IRubyObject pluginKlass;
+        private IRubyObject executionContext;
+        private IRubyObject metric;
 
+        InstanceFactory(Ruby runtime, RubyClass metaClass) {
+            super(runtime, metaClass);
+        }
+
+        @JRubyMethod
+        public IRubyObject initialize(final ThreadContext context, final IRubyObject pluginKlass, final IRubyObject executionContext, final IRubyObject metric) {
+            this.pluginKlass = pluginKlass;
+            this.executionContext = executionContext;
+            this.metric = metric;
+
+            return this;
+        }
+
+        @JRubyMethod(rest = true)
+        public IRubyObject create(final ThreadContext context, final IRubyObject[] args) {
+            InstanceFactory previous = null;
+            try {
+                previous = currentInstanceFactory.getAndSet(this);
+                return pluginKlass.callMethod(context, "new", args);
+            } finally {
+                currentInstanceFactory.set(previous);
+            }
+        }
+    }
+
+    private static AtomicReference<InstanceFactory> currentInstanceFactory = new AtomicReference<>();
     public static FakeOutClass latestInstance;
 
     private static IRubyObject OUT_STRATEGY = RUBY.newSymbol("single");
@@ -65,6 +98,12 @@ public class FakeOutClass extends RubyObject {
 
     @JRubyMethod
     public IRubyObject initialize(final ThreadContext context, final IRubyObject args) {
+//        // TODO: replicate init behaviour being sucked into plugin instance factory o_O
+        final InstanceFactory instanceFactory = currentInstanceFactory.get();
+        if (instanceFactory != null) {
+            this.metric(instanceFactory.metric);
+            this.executionContext(instanceFactory.executionContext);
+        }
         latestInstance = this;
         return this;
     }
@@ -78,6 +117,12 @@ public class FakeOutClass extends RubyObject {
     public IRubyObject register() {
         registerCallCount++;
         return this;
+    }
+
+    // TODO: this is super janky replication of core logic for tests O_o
+    @JRubyMethod(name = "instance_factory", meta = true, required = 2)
+    public static IRubyObject instanceFactory(final ThreadContext context, final IRubyObject recv, final IRubyObject executionContext, final IRubyObject metric) {
+        return OutputDelegatorTest.FAKE_OUT_INSTANCE_FACTORY_CLASS.callMethod(context, "new", new IRubyObject[]{recv, executionContext, metric});
     }
 
     @JRubyMethod(name = "metric=")

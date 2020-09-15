@@ -45,7 +45,7 @@ public class PluginConfigNameMethodDouble extends RubyObject {
     static {
         RUBY_META_CLASS = RUBY.defineClass("PluginConfigNameMethodDouble", RUBY.getObject(),
                 PluginConfigNameMethodDouble::new);
-        RUBY_META_CLASS.defineAnnotatedMethods(org.logstash.config.ir.compiler.FakeOutClass.class);
+        RUBY_META_CLASS.defineAnnotatedMethods(org.logstash.config.ir.PluginConfigNameMethodDouble.class);
     }
 
     PluginConfigNameMethodDouble(final Ruby runtime, final RubyClass metaClass) {

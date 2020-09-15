@@ -184,13 +184,12 @@ public final class OutputStrategyExt {
             final int count = workerCount.convertToInteger().getIntValue();
             workerQueue = new ArrayBlockingQueue<>(count);
             workers = context.runtime.newArray(count);
+            final RubyClass outputClass = (RubyClass) args[0];
+            final IRubyObject instanceFactory = outputClass.callMethod("instance_factory", args[2], args[1]);
+            initOutputCallsite(outputClass);
             for (int i = 0; i < count; ++i) {
-                final RubyClass outputClass = (RubyClass) args[0];
                 // Calling "new" here manually to allow mocking the ctor in RSpec Tests
-                final IRubyObject output = outputClass.callMethod(context, "new", pluginArgs);
-                initOutputCallsite(outputClass);
-                output.callMethod(context, "metric=", args[1]);
-                output.callMethod(context, "execution_context=", args[2]);
+                final IRubyObject output = instanceFactory.callMethod(context, "create", pluginArgs);
                 workers.append(output);
                 workerQueue.add(output);
             }
@@ -248,11 +247,9 @@ public final class OutputStrategyExt {
         @JRubyMethod(required = 4)
         public IRubyObject initialize(final ThreadContext context, final IRubyObject[] args) {
             final RubyClass outputClass = (RubyClass) args[0];
-            // Calling "new" here manually to allow mocking the ctor in RSpec Tests
-            output = args[0].callMethod(context, "new", args[3]);
+            IRubyObject instanceFactory = args[0].callMethod(context, "instance_factory", new IRubyObject[]{args[2], args[1]});
             initOutputCallsite(outputClass);
-            output.callMethod(context, "metric=", args[1]);
-            output.callMethod(context, "execution_context=", args[2]);
+            output = instanceFactory.callMethod(context,"create", args[3]);
             return this;
         }
 

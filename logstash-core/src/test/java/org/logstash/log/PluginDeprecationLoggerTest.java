@@ -68,7 +68,7 @@ public class PluginDeprecationLoggerTest {
     @Test
     public void testJavaPluginUsesDeprecationLogger() throws IOException {
         Map<String, Object> config = new HashMap<>();
-        TestingDeprecationPlugin sut = new TestingDeprecationPlugin(new ConfigurationImpl(config), new ContextImpl(null, null));
+        TestingDeprecationPlugin sut = new TestingDeprecationPlugin(new ConfigurationImpl(config), ContextImpl.NULL_INSTANCE);
 
         // Exercise
         Event evt = new Event(Collections.singletonMap("message", "Spock move me back"));

@@ -121,7 +121,7 @@ class LogStash::Outputs::Base < LogStash::Plugin
   def metric=(metric)
     super
     # Hack to create a new metric namespace using 'plugins' as the root
-    @codec.metric = metric.root.namespace(metric.namespace_name[0...-2].push(:codecs, codec.id))
+    @codec.metric = metric.root.namespace(metric.namespace_name[0...-2].push(:codecs, codec.id)) unless @codec.nil?
     metric
   end
 
@@ -131,7 +131,7 @@ class LogStash::Outputs::Base < LogStash::Plugin
     # are created at the class level
     # TODO(talevy): Codecs should have their own execution_context, for now they will inherit their
     #               parent plugin's
-    @codec.execution_context = context
+    @codec.execution_context = context unless @codec.nil?
     context
   end
 

@@ -33,6 +33,8 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.logstash.Event;
 
+import java.util.Arrays;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.logstash.RubyUtil.RUBY;
@@ -46,10 +48,20 @@ public class OutputDelegatorTest extends PluginDelegatorTestCase {
     private RubyArray events;
     private static final int EVENT_COUNT = 7;
     public static final RubyClass FAKE_OUT_CLASS;
+    public static final RubyClass FAKE_OUT_INSTANCE_FACTORY_CLASS;
 
     static {
-        FAKE_OUT_CLASS = RUBY.defineClass("FakeOutClass", RUBY.getObject(), FakeOutClass::new);
-        FAKE_OUT_CLASS.defineAnnotatedMethods(FakeOutClass.class);
+        try {
+            FAKE_OUT_CLASS = RUBY.defineClass("FakeOutClass", RUBY.getObject(), FakeOutClass::new);
+            FAKE_OUT_CLASS.defineAnnotatedMethods(FakeOutClass.class);
+            FAKE_OUT_INSTANCE_FACTORY_CLASS = RUBY.defineClass("FakeOutClassInstanceFactory", RUBY.getObject(), FakeOutClass.InstanceFactory::new);
+            FAKE_OUT_INSTANCE_FACTORY_CLASS.defineAnnotatedMethods(FakeOutClass.InstanceFactory.class);
+        } catch (Exception e) {
+            for(Throwable ce = e; ce != null; ce = e.getCause()) {
+                System.out.println(String.format("CE: %s AT %s", ce.getMessage(), Arrays.toString(ce.getStackTrace())));
+            }
+            throw e;
+        }
     }
 
     @Before
@@ -193,11 +205,11 @@ public class OutputDelegatorTest extends PluginDelegatorTestCase {
 
     private OutputDelegatorExt constructOutputDelegator() {
         return new OutputDelegatorExt(RUBY, RUBY_OUTPUT_DELEGATOR_CLASS).initialize(RUBY.getCurrentContext(), new IRubyObject[]{
-            FAKE_OUT_CLASS,
-            metric,
-            executionContext,
-            OutputStrategyExt.OutputStrategyRegistryExt.instance(RUBY.getCurrentContext(), null),
-            pluginArgs
+                FAKE_OUT_CLASS,
+                metric,
+                executionContext,
+                OutputStrategyExt.OutputStrategyRegistryExt.instance(RUBY.getCurrentContext(), null),
+                pluginArgs
         });
     }
 

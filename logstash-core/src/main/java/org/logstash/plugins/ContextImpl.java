@@ -24,6 +24,8 @@ import co.elastic.logstash.api.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.logstash.ConvertedMap;
+import org.logstash.config.ir.compiler.PluginFactory;
+import org.logstash.execution.AbstractPipelineExt;
 import org.logstash.log.DefaultDeprecationLogger;
 
 import java.io.Serializable;
@@ -38,7 +40,12 @@ public class ContextImpl implements Context {
      */
     private Metric pluginsScopedMetric;
 
-    public ContextImpl(DeadLetterQueueWriter dlqWriter, Metric metric) {
+    private final AbstractPipelineExt pipeline;
+
+    public static final Context NULL_INSTANCE = new ContextImpl(null, null, null);
+
+    public ContextImpl(final AbstractPipelineExt pipeline, final DeadLetterQueueWriter dlqWriter, final Metric metric) {
+        this.pipeline = pipeline;
         this.dlqWriter = dlqWriter;
         this.pluginsScopedMetric = metric;
     }
@@ -79,5 +86,9 @@ public class ContextImpl implements Context {
                 return new org.logstash.Event(data);
             }
         };
+    }
+
+    public AbstractPipelineExt getPipeline() {
+        return this.pipeline;
     }
 }

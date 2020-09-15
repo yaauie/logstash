@@ -13,6 +13,7 @@ import org.logstash.RubyUtil;
 import org.logstash.common.AbstractDeadLetterQueueWriterExt;
 import org.logstash.common.DLQWriterAdapter;
 import org.logstash.common.NullDeadLetterQueueWriter;
+import org.logstash.execution.AbstractPipelineExt;
 import org.logstash.execution.ExecutionContextExt;
 import org.logstash.instrument.metrics.AbstractNamespacedMetricExt;
 import org.logstash.plugins.ContextImpl;
@@ -68,7 +69,7 @@ public final class ExecutionContextFactoryExt extends RubyBasicObject {
             dlq = dlqWriter.toJava(DeadLetterQueueWriter.class);
         }
 
-        return new ContextImpl(dlq, new NamespacedMetricImpl(RubyUtil.RUBY.getCurrentContext(), metric));
+        return new ContextImpl((AbstractPipelineExt) pipeline, dlq, new NamespacedMetricImpl(RubyUtil.RUBY.getCurrentContext(), metric));
     }
 
     IRubyObject getPipeline() {
