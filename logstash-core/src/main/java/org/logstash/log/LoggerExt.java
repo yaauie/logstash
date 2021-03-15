@@ -177,14 +177,14 @@ public class LoggerExt extends RubyObject {
             File configFile = new File(filePath);
             if (configFile.exists()) {
                 String logsLocation = System.getProperty("ls.logs");
-                System.out.println(String.format(
+                System.err.println(String.format(
                         "Sending Logstash logs to %s which is now configured via log4j2.properties",
                         logsLocation));
                 LoggerContext loggerContext = LoggerContext.getContext(false);
                 loggerContext.setConfigLocation(configLocation);
                 LogManager.setFactory(new LogstashLoggerContextFactory(loggerContext));
             } else {
-                System.out.println(String.format(
+                System.err.println(String.format(
                         "Could not find log4j2 configuration at path %s. Using default config " +
                                 "which logs errors to the console",
                         filePath));

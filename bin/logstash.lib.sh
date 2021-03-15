@@ -91,42 +91,42 @@ setup_java() {
     setup_bundled_jdk_part
     JAVACMD_TEST=`command -v java`
     if [ -n "$JAVA_HOME" ]; then
-      echo "Using JAVA_HOME defined java: ${JAVA_HOME}"
+      >&2 echo "Using JAVA_HOME defined java: ${JAVA_HOME}"
       if [ -x "$JAVA_HOME/bin/java" ]; then
         JAVACMD="$JAVA_HOME/bin/java"
         if [ -d "${LOGSTASH_HOME}/${BUNDLED_JDK_PART}" -a -x "${LOGSTASH_HOME}/${BUNDLED_JDK_PART}/bin/java" ]; then
-          echo "WARNING, using JAVA_HOME while Logstash distribution comes with a bundled JDK"
+          >&2 echo "WARNING, using JAVA_HOME while Logstash distribution comes with a bundled JDK"
         fi
       else
-        echo "Invalid JAVA_HOME, doesn't contain bin/java executable"
+        >&2 echo "Invalid JAVA_HOME, doesn't contain bin/java executable"
       fi
     elif [ -d "${LOGSTASH_HOME}/${BUNDLED_JDK_PART}" -a -x "${LOGSTASH_HOME}/${BUNDLED_JDK_PART}/bin/java" ]; then
-      echo "Using bundled JDK: ${LOGSTASH_HOME}/${BUNDLED_JDK_PART}"
+      >&2 echo "Using bundled JDK: ${LOGSTASH_HOME}/${BUNDLED_JDK_PART}"
       JAVACMD="${LOGSTASH_HOME}/${BUNDLED_JDK_PART}/bin/java"
     elif [ -n "$JAVACMD_TEST" ]; then
       set +e
       JAVACMD=`command -v java`
       set -e
-      echo "Using system java: $JAVACMD"
+      >&2 echo "Using system java: $JAVACMD"
     fi
   fi
 
   if [ ! -x "$JAVACMD" ]; then
-    echo "could not find java; set JAVA_HOME or ensure java is in PATH"
+    >&2 echo "could not find java; set JAVA_HOME or ensure java is in PATH"
     exit 1
   fi
 
   # do not let JAVA_TOOL_OPTIONS slip in (as the JVM does by default)
   if [ ! -z "$JAVA_TOOL_OPTIONS" ]; then
-    echo "warning: ignoring JAVA_TOOL_OPTIONS=$JAVA_TOOL_OPTIONS"
+    >&2 echo "warning: ignoring JAVA_TOOL_OPTIONS=$JAVA_TOOL_OPTIONS"
     unset JAVA_TOOL_OPTIONS
   fi
 
   # JAVA_OPTS is not a built-in JVM mechanism but some people think it is so we
   # warn them that we are not observing the value of $JAVA_OPTS
   if [ ! -z "$JAVA_OPTS" ]; then
-    echo -n "warning: ignoring JAVA_OPTS=$JAVA_OPTS; "
-    echo "pass JVM parameters via LS_JAVA_OPTS"
+    >&2 echo -n "warning: ignoring JAVA_OPTS=$JAVA_OPTS; "
+    >&2 echo "pass JVM parameters via LS_JAVA_OPTS"
   fi
 
   # Set a default GC log file for use by jvm.options _before_ it's called.
@@ -147,9 +147,9 @@ setup_vendored_jruby() {
   JRUBY_BIN="${LOGSTASH_HOME}/vendor/jruby/bin/jruby"
 
   if [ ! -f "${JRUBY_BIN}" ] ; then
-    echo "Unable to find JRuby."
-    echo "If you are a user, this is a bug."
-    echo "If you are a developer, please run 'rake bootstrap'. Running 'rake' requires the 'ruby' program be available."
+    >&2 echo "Unable to find JRuby."
+    >&2 echo "If you are a user, this is a bug."
+    >&2 echo "If you are a developer, please run 'rake bootstrap'. Running 'rake' requires the 'ruby' program be available."
     exit 1
   fi
 
@@ -159,7 +159,7 @@ setup_vendored_jruby() {
     export GEM_HOME=${LS_GEM_HOME}
   fi
   if [ "$DEBUG" ] ; then
-    echo "Using GEM_HOME=${GEM_HOME}"
+    >&2 echo "Using GEM_HOME=${GEM_HOME}"
   fi
 
   if [ -z "$LS_GEM_PATH" ] ; then
@@ -168,7 +168,7 @@ setup_vendored_jruby() {
     export GEM_PATH=${LS_GEM_PATH}
   fi
   if [ "$DEBUG" ] ; then
-    echo "Using GEM_PATH=${GEM_PATH}"
+    >&2 echo "Using GEM_PATH=${GEM_PATH}"
   fi
 }
 
