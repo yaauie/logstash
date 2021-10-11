@@ -62,9 +62,6 @@ class LogStash::Agent
     @pipelines_registry = LogStash::PipelinesRegistry.new
 
     @name = setting("node.name")
-    @http_host = setting("api.http.host")
-    @http_port = setting("api.http.port")
-    @http_environment = setting("api.environment")
     # Generate / load the persistent uuid
     id
 
@@ -436,8 +433,7 @@ class LogStash::Agent
 
   def start_webserver
     @webserver_control_lock.synchronize do
-      options = {:http_host => @http_host, :http_ports => @http_port, :http_environment => @http_environment }
-      @webserver = LogStash::WebServer.new(@logger, self, options)
+      @webserver = LogStash::WebServer.from_settings(@logger, self, settings)
       @webserver_thread = Thread.new(@webserver) do |webserver|
         LogStash::Util.set_thread_name("Api Webserver")
         webserver.run
