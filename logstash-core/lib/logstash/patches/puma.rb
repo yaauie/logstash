@@ -48,6 +48,14 @@ module LogStash
     alias_method :<<, :puts
   end
 
+  # ::Puma::Events#error(str) sends Kernel#exit
+  # let's raise something sensible instead.
+  UnrecoverablePumaError = Class.new(RuntimeError)
+  class NonCrashingPumaEvents < ::Puma::Events
+    def error(str)
+      raise UnrecoverablePumaError.new(str)
+    end
+  end
 end
 
 # Reopen the puma class to create a scoped STDERR and STDOUT

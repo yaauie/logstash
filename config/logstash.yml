@@ -145,6 +145,13 @@
 #
 # api.environment: "production"
 #
+# The HTTP API can be secured with SSL (TLS). To do so, you will need to provide
+# the path to a password-protected keystore in jks format, along with credentials.
+#
+# api.ssl.enabled: false
+# api.ssl.keystore.path: /path/to/keystore.jks
+# api.ssl.keystore.password: "y0uRp4$$w0rD"
+#
 # ------------ Module Settings ---------------
 # Define modules here.  Modules definitions must be defined as an array.
 # The simple way to see this is to prepend each `name` with a `-`, and keep

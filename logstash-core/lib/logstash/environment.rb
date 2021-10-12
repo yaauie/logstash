@@ -73,6 +73,9 @@ module LogStash
             Setting::String.new("api.http.host", "127.0.0.1").with_deprecated_alias("http.host"),
          Setting::PortRange.new("api.http.port", 9600..9700).with_deprecated_alias("http.port"),
             Setting::String.new("api.environment", "production").with_deprecated_alias("http.environment"),
+           Setting::Boolean.new("api.ssl.enabled", false),
+  Setting::ExistingFilePath.new("api.ssl.keystore.path", nil, false).nullable,
+          Setting::Password.new("api.ssl.keystore.password", nil, false).nullable,
             Setting::String.new("queue.type", "memory", true, ["persisted", "memory"]),
             Setting::Boolean.new("queue.drain", false),
             Setting::Bytes.new("queue.page_capacity", "64mb"),
@@ -116,6 +119,15 @@ module LogStash
       if !settings.set?("path.dead_letter_queue")
         settings.set_value("path.dead_letter_queue", ::File.join(settings.get("path.data"), "dead_letter_queue"))
       end
+    end
+  end
+
+  SETTINGS.on_post_process do |settings|
+    if settings.get('api.ssl.enabled') && !settings.set?('api.ssl.keystore.path')
+      raise ArgumentError.new('Setting `api.ssl.enabled` is true, but required `api.ssl.keystore.path` is not provided. Please provide a valid keystore in `logstash.yml`')
+    end
+    if settings.set?('api.ssl.keystore.path') && !settings.set?('api.ssl.keystore.password')
+      raise ArgumentError.new("Setting `api.ssl.keystore.path` provided without required `api.ssl.keystore.password`. Please provided credentials in `logstash.yml`")
     end
   end
 

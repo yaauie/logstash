@@ -301,6 +301,12 @@ module LogStash
       SettingWithDeprecatedAlias.wrap(self, deprecated_alias_name)
     end
 
+    ##
+    # Returns a Nullable-wrapped self, effectively making the Setting optional.
+    def nullable
+      Nullable.new(self)
+    end
+
     def format(output)
       effective_value = self.value
       default_value = self.default
@@ -510,6 +516,22 @@ module LogStash
       end
     end
 
+    class Password < Coercible
+      def initialize(name, default=nil, strict=true)
+        super(name, LogStash::Util::Password, default, strict)
+      end
+
+      def coerce(value)
+        return value if value.kind_of?(LogStash::Util::Password)
+
+        LogStash::Util::Password.new(value)
+      end
+
+      def validate(value)
+        super(value)
+      end
+    end
+
     # The CoercibleString allows user to enter any value which coerces to a String.
     # For example for true/false booleans; if the possible_strings are ["foo", "true", "false"]
     # then these options in the config file or command line will be all valid: "foo", true, false, "true", "false"
@@ -703,6 +725,21 @@ module LogStash
       protected
       def validate(value)
         coerce(value)
+      end
+    end
+
+    # @see Setting#nullable
+    # @api internal
+    class Nullable < SimpleDelegator
+      def validate(value)
+        return true if value.nil?
+
+        __getobj__.send(:validate, value)
+      end
+
+      # prevent delegate from intercepting
+      def validate_value
+        validate(value)
       end
     end
 
