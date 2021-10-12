@@ -42,6 +42,11 @@ module LogStash
         ssl_params['keystore'] = settings.get('api.ssl.keystore.path') || fail('Setting `api.ssl.keystore.path` required when `api.ssl.enabled` is true.')
         keystore_pass_wrapper = settings.get('api.ssl.keystore.password') || fail('Setting `api.ssl.keystore.password` required when `api.ssl.enabled` is true.')
         ssl_params['keystore-pass'] = keystore_pass_wrapper.value
+        ssl_params['verify_mode'] = {
+          'none'     => 'none',
+          'optional' => 'peer',
+          'required' => 'force_peer',
+        }.fetch(settings.get('api.ssl.client_authentication'))
 
         options[:ssl_params] = ssl_params.freeze
       end
