@@ -9,7 +9,7 @@ export JRUBY_OPTS="-J-Xmx1g"
 export GRADLE_OPTS="-Xmx4g -Dorg.gradle.daemon=false -Dorg.gradle.logging.level=info -Dfile.encoding=UTF-8"
 export OSS=true
 
-SELECTED_TEST_SUITE=$1
+SELECTED_TEST_SUITE=${1?suite_required}
 
 # The acceptance test in our CI infrastructure doesn't clear the workspace between run
 # this mean the lock of the Gemfile can be sticky from a previous run, before generating any package
@@ -80,6 +80,9 @@ elif [[ $SELECTED_TEST_SUITE == $"all" ]]; then
   bundle exec rake qa:vm:ssh_config
   bundle exec rake qa:acceptance:all
   bundle exec rake qa:vm:halt
+else
+  echo "UNKNOWN SUITE '${SELECTED_TEST_SUITE}'"
+  exit 1
 fi
 
 

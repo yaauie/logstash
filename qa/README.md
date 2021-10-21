@@ -1,7 +1,7 @@
 ## Acceptance test Framework
 
 Welcome to the acceptance test framework for logstash, in this small
-README we're going to describe it's features and the necessary steps you will need to
+README we're going to describe its features and the necessary steps you will need to
 follow to setup your environment.
 
 ### Setup your environment
