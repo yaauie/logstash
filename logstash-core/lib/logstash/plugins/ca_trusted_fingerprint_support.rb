@@ -11,7 +11,6 @@ module LogStash
 
       lazy_init_attr(:trust_strategy_for_ca_trusted_fingerprint,
                      variable: :@_trust_strategy_for_ca_trusted_fingerprint) do
-        require 'logstash/patches/manticore/trust_strategies'
         @ca_trusted_fingerprint && org.logstash.util.CATrustedFingerprintTrustStrategy.new(@ca_trusted_fingerprint)
       end
     end
