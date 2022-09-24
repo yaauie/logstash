@@ -63,7 +63,7 @@ public enum MetricType {
     GAUGE_RUBYTIMESTAMP("gauge/rubytimestamp"),
 
     /**
-     * A flow-rate {@link FlowMetric}, instantiated with one or more backing {@link Metric}{@code <Number>}.
+     * A flow-rate {@link NaiveFlowMetric}, instantiated with one or more backing {@link Metric}{@code <Number>}.
      */
     FLOW_RATE("flow/rate"),
     ;

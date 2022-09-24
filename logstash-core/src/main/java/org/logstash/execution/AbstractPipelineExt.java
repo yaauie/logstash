@@ -67,12 +67,7 @@ import org.logstash.config.ir.PipelineConfig;
 import org.logstash.config.ir.PipelineIR;
 import org.logstash.ext.JRubyAbstractQueueWriteClientExt;
 import org.logstash.ext.JRubyWrappedWriteClientExt;
-import org.logstash.instrument.metrics.AbstractMetricExt;
-import org.logstash.instrument.metrics.AbstractNamespacedMetricExt;
-import org.logstash.instrument.metrics.FlowMetric;
-import org.logstash.instrument.metrics.Metric;
-import org.logstash.instrument.metrics.NullMetricExt;
-import org.logstash.instrument.metrics.UptimeMetric;
+import org.logstash.instrument.metrics.*;
 import org.logstash.instrument.metrics.counter.LongCounter;
 import org.logstash.plugins.ConfigVariableExpander;
 import org.logstash.secret.store.SecretStore;
@@ -404,7 +399,8 @@ public class AbstractPipelineExt extends RubyBasicObject {
         return context.nil;
     }
 
-    @SuppressWarnings("DuplicatedCode") // as much as this is sub-par, refactoring makes it harder to read.
+    @SuppressWarnings({"DuplicatedCode", "rawtypes"})
+    // as much as this is sub-par, refactoring makes it harder to read.
     @JRubyMethod(name = "initialize_flow_metrics")
     public final IRubyObject initializeFlowMetrics(final ThreadContext context) {
         if (metric.collector(context).isNil()) { return context.nil; }
@@ -453,7 +449,7 @@ public class AbstractPipelineExt extends RubyBasicObject {
     private static FlowMetric createFlowMetric(final RubySymbol name,
                                                final Metric<? extends Number> numeratorMetric,
                                                final Metric<? extends Number> denominatorMetric) {
-        return new FlowMetric(name.asJavaString(), numeratorMetric, denominatorMetric);
+        return FlowMetric.extended(name.asJavaString(), numeratorMetric, denominatorMetric);
     }
 
     private LongCounter initOrGetCounterMetric(final ThreadContext context,
