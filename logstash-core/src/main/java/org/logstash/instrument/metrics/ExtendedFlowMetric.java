@@ -7,7 +7,15 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.Duration;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,7 +26,7 @@ import java.util.stream.Collectors;
 public class ExtendedFlowMetric<N extends Number,D extends Number> extends AbstractMetric<Map<String,Double>> implements FlowMetric {
 
     private static final Logger LOGGER = LogManager.getLogger(ExtendedFlowMetric.class);
-    static final MathContext THREE_DIGIT_PRECISION = new MathContext(3, RoundingMode.HALF_UP);
+    static final MathContext FOUR_DIGIT_PRECISION = new MathContext(4, RoundingMode.HALF_UP);
 
     private final LongSupplier nanoTimeSupplier;
     private final Metric<N> numeratorMetric;
@@ -65,7 +73,7 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
     public Map<String, Double> getValue() {
         final Capture currentCapture = doCapture();
 
-        final Map<String, Double> rates = new HashMap<>();
+        final Map<String, Double> rates = new LinkedHashMap<>();
 
         this.seriesList.forEach(series -> {
             final Optional<Capture> seriesBaseline = series.baseline(currentCapture.nanoTimestamp);
@@ -75,7 +83,7 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
 
         currentCapture.calculateRate(baseline).ifPresent((rate) -> rates.put("lifetime", rate));
 
-        return Map.copyOf(rates);
+        return Collections.unmodifiableMap(rates);
     }
 
     // a capture MAY have a next (newer)
@@ -109,8 +117,8 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
 
             // To prevent the appearance of false-precision, we round to 3 decimal places.
             return OptionalDouble.of(BigDecimal.valueOf(deltaNumerator)
-                                               .divide(BigDecimal.valueOf(deltaDenominator), 4, RoundingMode.FLOOR)
-                                               .round(THREE_DIGIT_PRECISION)
+                                               .divide(BigDecimal.valueOf(deltaDenominator), 5, RoundingMode.FLOOR)
+                                               .round(FOUR_DIGIT_PRECISION)
                                                .doubleValue());
         }
 
@@ -131,16 +139,19 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
     }
 
     enum Policy {
-        CURRENT(Duration.ofSeconds(10), Duration.ofSeconds(1)),
-        LAST_1_MINUTE(Duration.ofMinutes(1), Duration.ofSeconds(3)),
-        LAST_3_MINUTES(Duration.ofMinutes(3), Duration.ofSeconds(10)),
-        LAST_5_MINUTES(Duration.ofMinutes(5), Duration.ofSeconds(15)),
-        LAST_15_MINUTES(Duration.ofMinutes(15), Duration.ofSeconds(30)),
-        LAST_1_HOUR(Duration.ofHours(1), Duration.ofMinutes(1)),
+                             // MAX_RETENTION, MIN_RESOLUTION             @1sec  @5sec
+                CURRENT(Duration.ofSeconds(10), Duration.ofSeconds(1)), //10ish  3ish
+          LAST_1_MINUTE(Duration.ofMinutes(1),  Duration.ofSeconds(3)), //20ish  12ish
+         LAST_5_MINUTES(Duration.ofMinutes(5),  Duration.ofSeconds(15)),//20ish        -> 31ish. 10s
+        LAST_15_MINUTES(Duration.ofMinutes(15), Duration.ofSeconds(30)),//30ish        -> 37ish
+            LAST_1_HOUR(Duration.ofHours(1),    Duration.ofMinutes(1)), //60ish
+          LAST_24_HOURS(Duration.ofHours(24),   Duration.ofMinutes(15)),//100ish
         ;
 
         final long minimumResolutionNanos;
         final long maximumRetentionNanos;
+
+        final long forceCompactionNanos;
 
         final transient String nameLower;
 
@@ -148,7 +159,15 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
             this.maximumRetentionNanos = maximumRetention.toNanos();
             this.minimumResolutionNanos = minimumResolution.toNanos();
 
+            // we force compaction on insertion only if the oldest entry is _way_ too old, enough for roughly 8 extra data-points.
+            // this reduces the insertion-time work significantly while still ensuring that our collections don't grow unbounded.
+            this.forceCompactionNanos = Math.addExact(maximumRetentionNanos, Math.multiplyExact(minimumResolutionNanos, 8));
+
             this.nameLower = name().toLowerCase();
+        }
+
+        Policy(final Duration maximumRetention) {
+            this(maximumRetention, maximumRetention.dividedBy(64));
         }
     }
 
@@ -166,10 +185,6 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
             this.lastCommitted = new AtomicLong(zeroCapture.nanoTimestamp);
         }
 
-        private long datapointCount() {
-            return committedCaptures.stream().count();
-        }
-
         void append(final Capture nextCapture) {
             LOGGER.trace("[{}/{}].append({})", ExtendedFlowMetric.this.getName(), this.policy.name(), nextCapture);
             // always promote to first stage
@@ -184,10 +199,12 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
                 if (lastCommitted.compareAndSet(lastCommit, previouslyStaged.nanoTimestamp)) {
                     LOGGER.trace("[{}/{}]//PROMOTE-WIN({})", ExtendedFlowMetric.this.getName(), this.policy.name(), nextCapture);
                     committedCaptures.offer(previouslyStaged);
-                    // TODO: compact a little less frequently.
-                    compactAsOf(nextCapture.nanoTimestamp);
-                    if (LOGGER.isTraceEnabled()) {
-                        LOGGER.trace("[{}/{}]//DATA-POINTS-RETAINED({})", ExtendedFlowMetric.this.getName(), this.policy.name(), datapointCount());
+                    maybeCompact(nextCapture.nanoTimestamp);
+                    if (LOGGER.isDebugEnabled()) {
+                        final int sz = committedCaptures.size();
+                        if (sz > 20) {
+                            LOGGER.trace("[{}/{}]//DATA-POINTS-RETAINED({})", ExtendedFlowMetric.this.getName(), this.policy.name(), sz);
+                        }
                     }
                 } else {
                     LOGGER.trace("[{}/{}]//PROMOTE-NIX({})", ExtendedFlowMetric.this.getName(), this.policy.name(), nextCapture);
@@ -207,8 +224,20 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
             return compactUntil(nanoTime - policy.maximumRetentionNanos);
         }
 
+        private void maybeCompact(final long nanoTime) {
+            final long compactionThreshold = nanoTime - policy.forceCompactionNanos;
+            final Capture peek = committedCaptures.peek();
+            if (peek != null && peek.nanoTimestamp < compactionThreshold) {
+                compactAsOf(nanoTime);
+            }
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("[{}/{}]//post-compaction-size({})", ExtendedFlowMetric.this.getName(), this.policy.name(), committedCaptures.size());
+            }
+        }
+
         private Capture compactUntil(final long nanoTimeThreshold) {
             LOGGER.trace("[{}/{}]//compactUntil({})", ExtendedFlowMetric.this.getName(), this.policy.name(), nanoTimeThreshold);
+
             final Iterator<Capture> captureIterator = committedCaptures.iterator();
 
             Capture newestOlderThanThreshold = null;
