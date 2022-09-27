@@ -19,6 +19,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 
+/**
+ * An {@link ExtendedFlowMetric} is a {@link FlowMetric} that is capable of producing
+ * any number of rolling-average rates, each with their own retention policy that includes
+ * the minimum resolution at which we allow captures to be tracked and the maximum retention
+ * period, the oldest entry of which will be used as a baseline for calculations.
+ *
+ * @param <N> the numerator metric's value type
+ * @param <D> the denominator metric's value type
+ */
 public class ExtendedFlowMetric<N extends Number,D extends Number> extends AbstractMetric<Map<String,Double>> implements FlowMetric {
 
     private static final Logger LOGGER = LogManager.getLogger(ExtendedFlowMetric.class);
@@ -27,18 +36,19 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
     private final Metric<N> numeratorMetric;
     private final Metric<D> denominatorMetric;
 
-    // @see
-    private final CaptureFactory<N,D> captureFactory;
+    //
+    private final CaptureFactory captureFactory;
 
-    private final Capture baseline;
+    private final Capture lifetimeBaseline;
 
-    private final List<Series> seriesList;
+    private final List<RollingAverageSeries> seriesList;
 
     // test dependency injection
     private final LongSupplier nanoTimeSupplier;
 
     // in order to prevent presenting false-precision, we limit the precision to four digits.
     static final MathContext FOUR_DIGIT_PRECISION = new MathContext(4, RoundingMode.HALF_UP);
+    static final String LIFETIME_KEY = "lifetime";
 
     public ExtendedFlowMetric(final String name,
                               final Metric<N> numeratorMetric,
@@ -51,43 +61,56 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
                        final Metric<N> numeratorMetric,
                        final Metric<D> denominatorMetric) {
         super(name);
+        this.captureFactory = CaptureFactory.optimizedFor(numeratorMetric, denominatorMetric);
+
         this.nanoTimeSupplier = nanoTimeSupplier;
         this.numeratorMetric = numeratorMetric;
         this.denominatorMetric = denominatorMetric;
 
-        this.captureFactory = initCaptureFactory();
+        this.lifetimeBaseline = doCapture();
 
-        this.baseline = doCapture();
-
-        this.seriesList = Arrays.stream(Policy.values())
-                .sequential()
-                .map(policy -> new Series(policy, this.baseline))
-                .collect(Collectors.toList());
+        this.seriesList = Arrays.stream(BuiltInRetentionPolicy.values())
+                                .map(this::retentionSeriesFromRetentionPolicy)
+                                .collect(Collectors.toList());
     }
 
-    private CaptureFactory<N,D> initCaptureFactory() {
-        Objects.requireNonNull(numeratorMetric, "numeratorMetric");
-        Objects.requireNonNull(denominatorMetric, "denominatorMetric");
-
-        if (numeratorMetric.getType() == MetricType.COUNTER_LONG) {
-            if (denominatorMetric.getType() == MetricType.COUNTER_LONG) {
-                LOGGER.debug("{} -> LongLongCapture ({}/{})", getName(), numeratorMetric.getType(), denominatorMetric.getType());
-                return LongLongCapture::new;
-             }
-            LOGGER.debug("{} -> LongNumberCapture ({}/{})", getName(), numeratorMetric.getType(), denominatorMetric.getType());
-            return LongNumberCapture::new;
-        }
-        LOGGER.debug("{} -> NumberNumberCapture ({}/{})", getName(), numeratorMetric.getType(), denominatorMetric.getType());
-        return NumberNumberCapture::new;
-    }
-
+    /**
+     * The {@link CaptureFactory} creates {@link Capture}s
+     */
     @FunctionalInterface
-    interface CaptureFactory<NN extends Number, DD extends Number> {
-        Capture create(final long nanoTimestamp, final NN numerator, final DD denominator);
+    interface CaptureFactory {
+        <NN extends Number, DD extends Number> Capture createCapture(final long nanoTimestamp, final NN numerator, final DD denominator);
+
+        /**
+         * Return an
+         * @param numeratorMetric the numerator metric
+         * @param denominatorMetric the denominator metric
+         * @return an {@link CaptureFactory} that is capable of producing optimized {@link Capture}s for the given metrics.
+         */
+        private static CaptureFactory optimizedFor(final Metric<? extends Number> numeratorMetric,
+                                                   final Metric<? extends Number> denominatorMetric) {
+            Objects.requireNonNull(numeratorMetric, "numeratorMetric");
+            Objects.requireNonNull(denominatorMetric, "denominatorMetric");
+
+            if (numeratorMetric.getType() == MetricType.COUNTER_LONG) {
+                if (denominatorMetric.getType() == MetricType.COUNTER_LONG) {
+                    LOGGER.debug("[{}({})/{}({})] -> LongLongCapture", numeratorMetric.getName(), numeratorMetric.getType(), denominatorMetric.getName(), denominatorMetric.getType());
+                    return LongLongCapture::new;
+                }
+                LOGGER.debug("[{}({})/{}({})] -> LongNumberCapture", numeratorMetric.getName(), numeratorMetric.getType(), denominatorMetric.getName(), denominatorMetric.getType());
+                return LongNumberCapture::new;
+            }
+            LOGGER.debug("[{}({})/{}({})] -> NumberNumberCapture", numeratorMetric.getName(), numeratorMetric.getType(), denominatorMetric.getName(), denominatorMetric.getType());
+            return NumberNumberCapture::new;
+        }
+    }
+
+    private RollingAverageSeries retentionSeriesFromRetentionPolicy(BuiltInRetentionPolicy builtInRetentionPolicy) {
+        return new RollingAverageSeries(builtInRetentionPolicy, this.lifetimeBaseline);
     }
 
     private Capture doCapture() {
-        return captureFactory.create(nanoTimeSupplier.getAsLong(), numeratorMetric.getValue(), denominatorMetric.getValue());
+        return captureFactory.createCapture(nanoTimeSupplier.getAsLong(), numeratorMetric.getValue(), denominatorMetric.getValue());
     }
 
     @Override
@@ -105,9 +128,9 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
         this.seriesList.forEach(series -> series.baseline(currentCapture.nanoTime())
                                                 .map((b) -> getRate(currentCapture, b))
                                                 .orElseGet(OptionalDouble::empty)
-                                                .ifPresent((rate) -> rates.put(series.policy.nameLower, rate)));
+                                                .ifPresent((rate) -> rates.put(series.policy.toString(), rate)));
 
-        getRate(currentCapture, baseline).ifPresent((rate) -> rates.put("lifetime", rate));
+        getRate(currentCapture, lifetimeBaseline).ifPresent((rate) -> rates.put(LIFETIME_KEY, rate));
 
         return Collections.unmodifiableMap(rates);
     }
@@ -128,29 +151,57 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
                                                .doubleValue());
     }
 
-    private static abstract class Capture {
+    /**
+     * A {@link Capture} holds a pair of point-in-time data-points, which can be compared
+     * to produce a rate-of change of the numerator relative to the denominator.
+     */
+    interface Capture {
+        long nanoTime();
+        BigDecimal numerator();
+        BigDecimal denominator();
+    }
+
+    /**
+     * The {@link AbstractCapture} is an abstract implementation of {@link Capture}
+     * that holds common timestamp-related information so that the {@link RollingAverageSeries}
+     * can properly retain its configured resolution and retention.
+     */
+    private static abstract class AbstractCapture implements Capture {
         private final long nanoTimestamp;
 
-        public Capture(long nanoTimestamp) {
+        public AbstractCapture(long nanoTimestamp) {
             this.nanoTimestamp = nanoTimestamp;
         }
 
+        @Override
         public long nanoTime() {
             return nanoTimestamp;
         }
 
-        abstract BigDecimal numerator();
-        abstract BigDecimal denominator();
+        @Override
+        public String toString() {
+            return getClass().getSimpleName() +"{" +
+                    "nanoTimestamp=" + nanoTimestamp +
+                    " numerator=" + numerator() +
+                    " denominator=" + denominator() +
+                    '}';
+        }
     }
 
-    private class NumberNumberCapture extends Capture {
+    /**
+     * An unoptimized, fully-boxed implementation of {@link Capture}.
+     *
+     * @param <NN> the numerator's type
+     * @param <DD> the denominator's type
+     */
+    private static class NumberNumberCapture<NN extends Number, DD extends Number> extends AbstractCapture {
 
-        private final N numerator;
-        private final D denominator;
+        private final NN numerator;
+        private final DD denominator;
 
         NumberNumberCapture(final long nanoTimestamp,
-                            final N numerator,
-                            final D denominator) {
+                            final NN numerator,
+                            final DD denominator) {
             super(nanoTimestamp);
             this.numerator = numerator;
             this.denominator = denominator;
@@ -167,13 +218,17 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
         }
     }
 
-    private abstract class LongNumeratorAbstractCapture extends Capture {
+    /**
+     * A common abstract class for {@link Capture}s whose numerator is a long,
+     * optimized to hold the long value in an unboxed primitive.
+     */
+    private static abstract class LongNumeratorAbstractCapture extends AbstractCapture {
         private final long numerator;
 
         public LongNumeratorAbstractCapture(final long nanoTimestamp,
-                                            final N numerator) {
+                                            final long numerator) {
             super(nanoTimestamp);
-            this.numerator = (long) numerator;
+            this.numerator = numerator;
         }
 
 
@@ -183,13 +238,19 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
         }
     }
 
-    private class LongNumberCapture extends LongNumeratorAbstractCapture {
-        private final D denominator;
+    /**
+     * A partially-optimized implementation of {@link Capture} whose numerator
+     * is a primitive long and whose denominator is boxed.
+     *
+     * @param <DD> the boxed type of the denominator.
+     */
+    private static class LongNumberCapture<DD extends Number> extends LongNumeratorAbstractCapture {
+        private final DD denominator;
 
-        public LongNumberCapture(final long nanoTimestamp,
-                                 final N numerator,
-                                 D denominator) {
-            super(nanoTimestamp, numerator);
+        public <NN extends Number> LongNumberCapture(final long nanoTimestamp,
+                                                     final NN numerator,
+                                                     final DD denominator) {
+            super(nanoTimestamp, (long)numerator);
             this.denominator = denominator;
         }
 
@@ -199,13 +260,17 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
         }
     }
 
-    private class LongLongCapture extends LongNumeratorAbstractCapture {
+    /**
+     * A fully-optimized implementation of {@link Capture} whose numerator
+     * and denominator are both primitive longs.
+     */
+    private static class LongLongCapture extends LongNumeratorAbstractCapture {
         private final long denominator;
 
-        public LongLongCapture(final long nanoTimestamp,
-                               final N numerator,
-                               final D denominator) {
-            super(nanoTimestamp, numerator);
+        public <NN extends Number, DD extends Number> LongLongCapture(final long nanoTimestamp,
+                                                                      final NN numerator,
+                                                                      final DD denominator) {
+            super(nanoTimestamp, (long)numerator);
             this.denominator = (long) denominator;
         }
 
@@ -215,8 +280,14 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
         }
     }
 
-    enum Policy {
-                             // MAX_RETENTION, MIN_RESOLUTION             @1sec  @5sec
+    interface RetentionPolicy {
+        long minimumResolutionNanos();
+        long maximumRetentionNanos();
+        long forceCompactionNanos();
+    }
+
+    enum BuiltInRetentionPolicy implements RetentionPolicy {
+                             // MAX_RETENTION,  MIN_RESOLUTION             @1sec  @5sec
                 CURRENT(Duration.ofSeconds(10), Duration.ofSeconds(1)), //10ish  3ish
           LAST_1_MINUTE(Duration.ofMinutes(1),  Duration.ofSeconds(3)), //20ish  12ish
          LAST_5_MINUTES(Duration.ofMinutes(5),  Duration.ofSeconds(15)),//20ish        -> 31ish. 10s
@@ -232,31 +303,51 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
 
         final transient String nameLower;
 
-        Policy(final Duration maximumRetention, final Duration minimumResolution) {
+        BuiltInRetentionPolicy(final Duration maximumRetention, final Duration minimumResolution) {
             this.maximumRetentionNanos = maximumRetention.toNanos();
             this.minimumResolutionNanos = minimumResolution.toNanos();
 
-            // we force compaction on insertion only if the oldest entry is substantially too old,
-            // enough for roughly the greater of either 30 seconds or roughly 8 extra data-points
-            // per the configured minimum resolution.
-            // This reduces the insertion-time work significantly
-            // while still ensuring that our collections don't grow unbounded.
-            final long forceCompactionMargin = Math.max(Duration.ofSeconds(30).toNanos(), Math.multiplyExact(minimumResolutionNanos, 8));
+            // we generally rely on query-time compaction, and only perform insertion-time compaction
+            // if our series' head entry is significantly older than our maximum retention, which
+            // allows us to ensure a reasonable upper-bound of collection size without incurring the
+            // cost of compaction too often or inspecting the collection's size.
+            final long forceCompactionMargin = Math.max(Duration.ofSeconds(30).toNanos(),
+                                                        Math.multiplyExact(minimumResolutionNanos, 8));
             this.forceCompactionNanos = Math.addExact(maximumRetentionNanos, forceCompactionMargin);
 
             this.nameLower = name().toLowerCase();
         }
+
+        @Override
+        public long minimumResolutionNanos() {
+            return this.minimumResolutionNanos;
+        }
+
+        @Override
+        public long maximumRetentionNanos() {
+            return this.maximumRetentionNanos;
+        }
+
+        @Override
+        public long forceCompactionNanos() {
+            return this.forceCompactionNanos;
+        }
+
+        @Override
+        public String toString() {
+            return nameLower;
+        }
     }
 
-    private class Series {
+    private class RollingAverageSeries {
         private final AtomicReference<Capture> stage = new AtomicReference<>();
         private final AtomicReference<Node> tail = new AtomicReference<>();
 
         private final AtomicReference<Node> head = new AtomicReference<>();
 
-        private final Policy policy;
+        private final RetentionPolicy policy;
 
-        public Series(final Policy policy, final Capture zeroCapture) {
+        public RollingAverageSeries(final RetentionPolicy policy, final Capture zeroCapture) {
             this.policy = policy;
 
             final Node zeroNode = new Node(zeroCapture);
@@ -265,31 +356,31 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
         }
 
         private void append(final Capture nextCapture) {
-            LOGGER.trace("[{}/{}].append({})", ExtendedFlowMetric.this.getName(), this.policy.name(), nextCapture);
+            LOGGER.trace("[{}/{}].append({})", ExtendedFlowMetric.this.getName(), this.policy, nextCapture);
             final Node casTail = this.tail.get(); // for CAS
             // always stage
             final Capture previouslyStaged = stage.getAndSet(nextCapture);
 
             // promote previously-staged if it is required to maintain our minimum resolution.
             // nextCapture.nanoTime() - lastCommit >= policy.minimumResolutionNanos)
-            if (previouslyStaged != null && nextCapture.nanoTime() - casTail.capture.nanoTime() > policy.minimumResolutionNanos) {
-                LOGGER.trace("[{}/{}]//PROMOTE-TRY({})", ExtendedFlowMetric.this.getName(), this.policy.name(), nextCapture);
+            if (previouslyStaged != null && nextCapture.nanoTime() - casTail.capture.nanoTime() > policy.minimumResolutionNanos()) {
+                LOGGER.trace("[{}/{}]//PROMOTE-TRY({})", ExtendedFlowMetric.this.getName(), this.policy, nextCapture);
                 final Node proposedNode = new Node(previouslyStaged);
                 if (this.tail.compareAndSet(casTail, proposedNode)) {
-                    LOGGER.trace("[{}/{}]//PROMOTE-WIN({})", ExtendedFlowMetric.this.getName(), this.policy.name(), nextCapture);
+                    LOGGER.trace("[{}/{}]//PROMOTE-WIN({})", ExtendedFlowMetric.this.getName(), this.policy, nextCapture);
                     casTail.next.set(proposedNode);
                     maybeCompact(nextCapture.nanoTime());
-                    if (LOGGER.isDebugEnabled()) {
-                        LOGGER.debug("[{}/{}]//DATA-POINTS-RETAINED({})", ExtendedFlowMetric.this.getName(), this.policy.name(), effectiveSize() + 1);
+                    if (LOGGER.isTraceEnabled()) {
+                        LOGGER.trace("[{}/{}]//DATA-POINTS-RETAINED({})", ExtendedFlowMetric.this.getName(), this.policy, effectiveSize());
                     }
                 } else {
-                    LOGGER.trace("[{}/{}]//PROMOTE-NIX({})", ExtendedFlowMetric.this.getName(), this.policy.name(), nextCapture);
+                    LOGGER.trace("[{}/{}]//PROMOTE-NIX({})", ExtendedFlowMetric.this.getName(), this.policy, nextCapture);
                 }
             }
         }
 
         public Optional<Capture> baseline(final long nanoTime) {
-            final long threshold = nanoTime - policy.maximumRetentionNanos;
+            final long threshold = nanoTime - policy.maximumRetentionNanos();
             final Node head = compactUntil(threshold);
             if (head.capture.nanoTime() <= threshold) {
                 return Optional.of(head.capture);
@@ -298,9 +389,14 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
             }
         }
 
-        int effectiveSize() {
-            int i = 1;
-            for (Node current = this.head.getPlain(); current != null; current = current.next.getPlain()) { i++; }
+        /**
+         * @return a computationally-expensive estimate of the number of captures in this series.
+         */
+        private int effectiveSize() {
+            int i = 1; // start at 1 to include our unlinked stage
+            // NOTE: while we get our head with volatile-get,  we chase its tail
+            // with plain-gets to tolerate missed appends from other threads.
+            for (Node current = this.head.get(); current != null; current = current.next.getPlain()) { i++; }
             return i;
         }
 
@@ -309,11 +405,11 @@ public class ExtendedFlowMetric<N extends Number,D extends Number> extends Abstr
         }
 
         private void maybeCompact(final long nanoTime) {
-            final long forceCompactionThreshold = nanoTime - policy.forceCompactionNanos;
+            final long forceCompactionThreshold = nanoTime - policy.forceCompactionNanos();
             if (head.getPlain().capture.nanoTime() < forceCompactionThreshold) {
-                if (LOGGER.isDebugEnabled()) {  LOGGER.debug("[{}/{}]//pre-force-compaction-size({})", ExtendedFlowMetric.this.getName(), this.policy.name(), effectiveSize()); }
-                compactUntil(nanoTime - policy.maximumRetentionNanos);
-                if (LOGGER.isDebugEnabled()) {  LOGGER.debug("[{}/{}]//post-force-compaction-size({})", ExtendedFlowMetric.this.getName(), this.policy.name(), effectiveSize()); }
+                if (LOGGER.isDebugEnabled()) {  LOGGER.debug("[{}/{}]//pre-force-compaction-size({})", ExtendedFlowMetric.this.getName(), this.policy, effectiveSize()); }
+                compactUntil(nanoTime - policy.maximumRetentionNanos());
+                if (LOGGER.isDebugEnabled()) {  LOGGER.debug("[{}/{}]//post-force-compaction-size({})", ExtendedFlowMetric.this.getName(), this.policy, effectiveSize()); }
             }
         }
 
