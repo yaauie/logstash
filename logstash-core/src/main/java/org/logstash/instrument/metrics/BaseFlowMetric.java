@@ -23,6 +23,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.Map;
 import java.util.Objects;
@@ -45,6 +46,8 @@ abstract class BaseFlowMetric extends AbstractMetric<Map<String,Double>> impleme
     protected final FlowCapture lifetimeBaseline;
 
     final LongSupplier nanoTimeSupplier;
+
+    static final MathContext LIMITED_PRECISION = new MathContext(4, RoundingMode.HALF_UP);
 
     BaseFlowMetric(final LongSupplier nanoTimeSupplier,
                    final String name,
@@ -85,7 +88,7 @@ abstract class BaseFlowMetric extends AbstractMetric<Map<String,Double>> impleme
             return OptionalDouble.empty();
         }
 
-        final BigDecimal rate = deltaNumerator.divide(deltaDenominator, 3, RoundingMode.HALF_UP);
+        final BigDecimal rate = deltaNumerator.divide(deltaDenominator, LIMITED_PRECISION);
 
         return OptionalDouble.of(rate.doubleValue());
     }
