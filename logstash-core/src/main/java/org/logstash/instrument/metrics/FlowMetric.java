@@ -20,6 +20,7 @@
 package org.logstash.instrument.metrics;
 
 import java.util.Map;
+import java.util.Objects;
 
 public interface FlowMetric extends Metric<Map<String,Double>> {
     void capture();
@@ -27,6 +28,10 @@ public interface FlowMetric extends Metric<Map<String,Double>> {
     static FlowMetric create(final String name,
                              final Metric<? extends Number> numerator,
                              final Metric<? extends Number> denominator) {
-        return new SimpleFlowMetric(name, numerator, denominator);
+        if (Objects.equals(System.getenv("FLOW_EXTENDED"), "1")) {
+            return new ExtendedFlowMetric(name, numerator, denominator);
+        } else {
+            return new SimpleFlowMetric(name, numerator, denominator);
+        }
     }
 }
