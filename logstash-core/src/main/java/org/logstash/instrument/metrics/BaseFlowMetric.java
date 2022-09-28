@@ -45,12 +45,15 @@ abstract class BaseFlowMetric extends AbstractMetric<Map<String,Double>> impleme
     protected final FlowCapture lifetimeBaseline;
 
     final LongSupplier nanoTimeSupplier;
+    final FlowCapture.Factory captureFactory;
 
     BaseFlowMetric(final LongSupplier nanoTimeSupplier,
                    final String name,
                    final Metric<? extends Number> numeratorMetric,
                    final Metric<? extends Number> denominatorMetric) {
         super(name);
+        this.captureFactory = FlowCapture.factoryFor(numeratorMetric, denominatorMetric);
+
         this.nanoTimeSupplier = nanoTimeSupplier;
         this.numeratorMetric = numeratorMetric;
         this.denominatorMetric = denominatorMetric;
@@ -65,7 +68,9 @@ abstract class BaseFlowMetric extends AbstractMetric<Map<String,Double>> impleme
     }
 
     protected FlowCapture doCapture() {
-        return new FlowCapture(nanoTimeSupplier.getAsLong(), numeratorMetric.getValue(), denominatorMetric.getValue());
+        return captureFactory.createCapture(nanoTimeSupplier.getAsLong(),
+                                            numeratorMetric.getValue(),
+                                            denominatorMetric.getValue());
     }
 
     /**
