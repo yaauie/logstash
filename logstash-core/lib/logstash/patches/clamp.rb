@@ -60,15 +60,39 @@ module Clamp
         end
       end
 
+      def define_multi_writer_for(option, &block)
+        if option.attribute_name == "SETTINGS_PASSTHROUGH"
+          define_method(option.write_method) do |value_list|
+            value_list.each do |value|
+              key, value = block ? instance_exec(value, &block) : value.split(':', 2)
+              fail(ArgumentError) unless key && value
+              LogStash::SETTINGS.set_value(key, value)
+            end
+          end
+        else
+          define_method(option.write_method) do |value_list|
+            LogStash::SETTINGS.get_setting(option.attribute_name).reset
+            LogStash::SETTINGS.set_value(option.attribute_name, value_list)
+          end
+        end
+      end
+
       def define_reader_for(option)
         define_method(option.read_method) do
           LogStash::SETTINGS.get_value(option.attribute_name)
         end
       end
-
-      def define_appender_for(option)
-        define_method(option.append_method) do |value|
-          LogStash::SETTINGS.get_value(option.attribute_name) << value
+      def define_appender_for(option, &block)
+        if option.attribute_name == "SETTINGS_PASSTHROUGH"
+          define_method(option.append_method) do |value|
+            key, value = block ? instance_exec(value, &block) : value.split(':', 2)
+            fail(ArgumentError) unless key && value
+            LogStash::SETTINGS.set_value(key, value)
+          end
+        else
+          define_method(option.append_method) do |value|
+            LogStash::SETTINGS.get_value(option.attribute_name) << value
+          end
         end
       end
 
