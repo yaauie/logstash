@@ -29,6 +29,7 @@ import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.jruby.Ruby;
 import org.jruby.RubyBoolean;
 import org.jruby.RubyClass;
+import org.jruby.RubyHash;
 import org.jruby.RubyObject;
 import org.jruby.anno.JRubyClass;
 import org.jruby.anno.JRubyMethod;
@@ -38,6 +39,7 @@ import org.jruby.runtime.builtin.IRubyObject;
 
 import java.io.File;
 import java.net.URI;
+import java.util.Map;
 
 /**
  * JRuby extension, it's part of log4j wrapping for JRuby.
@@ -49,10 +51,17 @@ public class LoggerExt extends RubyObject {
     private static final long serialVersionUID = 1L;
 
     private static final Object CONFIG_LOCK = new Object();
+
+    private final Map<IRubyObject,IRubyObject> reservedFieldMappings;
     private transient Logger logger;
 
     public LoggerExt(final Ruby runtime, final RubyClass metaClass) {
         super(runtime, metaClass);
+
+        this.reservedFieldMappings = Map.of(
+                runtime.newSymbol("message"), runtime.newSymbol("_message"),
+                runtime.newString("message"), runtime.newString("_message")
+        );
     }
 
     @JRubyMethod
@@ -196,6 +205,19 @@ public class LoggerExt extends RubyObject {
     private IRubyObject logCommon(Level level, final ThreadContext context, final IRubyObject[] args) {
         if (args.length == 1) {
             logger.log(level, args[0].asJavaString());
+        } else if (args[1] instanceof RubyHash) {
+            // if we have a RubyHash, remap reserved fields
+            RubyHash params = (RubyHash) args[1];
+            for (Map.Entry<IRubyObject, IRubyObject> reservedFieldMapping : this.reservedFieldMappings.entrySet()) {
+                final IRubyObject reservedKey = reservedFieldMapping.getKey();
+                if (params.containsKey(reservedKey)) {
+                    final IRubyObject remappedKey = reservedFieldMapping.getValue();
+                    params = params.dupFast(context); // avoid leaking remapping to caller
+                    params.op_aset(context, remappedKey, params.delete(reservedKey));
+                }
+            }
+
+            logger.log(level, args[0].asJavaString(), params);
         } else {
             logger.log(level, args[0].asJavaString(), args[1]);
         }
