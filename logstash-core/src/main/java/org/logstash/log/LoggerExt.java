@@ -93,62 +93,32 @@ public class LoggerExt extends RubyObject {
 
     @JRubyMethod(name = "debug", required = 1, optional = 1)
     public IRubyObject rubyDebug(final ThreadContext context, final IRubyObject[] args) {
-        if (args.length > 1) {
-            logger.debug(args[0].asJavaString(), args[1]);
-        } else {
-            logger.debug(args[0].asJavaString());
-        }
-        return this;
+        return logCommon(Level.DEBUG, context, args);
     }
 
     @JRubyMethod(name = "warn", required = 1, optional = 1)
     public IRubyObject rubyWarn(final ThreadContext context, final IRubyObject[] args) {
-        if (args.length > 1) {
-            logger.warn(args[0].asJavaString(), args[1]);
-        } else {
-            logger.warn(args[0].asJavaString());
-        }
-        return this;
+        return logCommon(Level.WARN, context, args);
     }
 
     @JRubyMethod(name = "info", required = 1, optional = 1)
     public IRubyObject rubyInfo(final ThreadContext context, final IRubyObject[] args) {
-        if (args.length > 1) {
-            logger.info(args[0].asJavaString(), args[1]);
-        } else {
-            logger.info(args[0].asJavaString());
-        }
-        return this;
+        return logCommon(Level.INFO, context, args);
     }
 
     @JRubyMethod(name = "error", required = 1, optional = 1)
     public IRubyObject rubyError(final ThreadContext context, final IRubyObject[] args) {
-        if (args.length > 1) {
-            logger.error(args[0].asJavaString(), args[1]);
-        } else {
-            logger.error(args[0].asJavaString());
-        }
-        return this;
+        return logCommon(Level.ERROR, context, args);
     }
 
     @JRubyMethod(name = "fatal", required = 1, optional = 1)
     public IRubyObject rubyFatal(final ThreadContext context, final IRubyObject[] args) {
-        if (args.length > 1) {
-            logger.fatal(args[0].asJavaString(), args[1]);
-        } else {
-            logger.fatal(args[0].asJavaString());
-        }
-        return this;
+        return logCommon(Level.FATAL, context, args);
     }
 
     @JRubyMethod(name = "trace", required = 1, optional = 1)
     public IRubyObject rubyTrace(final ThreadContext context, final IRubyObject[] args) {
-        if (args.length > 1) {
-            logger.trace(args[0].asJavaString(), args[1]);
-        } else {
-            logger.trace(args[0].asJavaString());
-        }
-        return this;
+        return logCommon(Level.TRACE, context, args);
     }
 
     @JRubyMethod(name = "configure_logging", meta = true, required = 1, optional = 1)
@@ -223,4 +193,12 @@ public class LoggerExt extends RubyObject {
         }
     }
 
+    private IRubyObject logCommon(Level level, final ThreadContext context, final IRubyObject[] args) {
+        if (args.length == 1) {
+            logger.log(level, args[0].asJavaString());
+        } else {
+            logger.log(level, args[0].asJavaString(), args[1]);
+        }
+        return this;
+    }
 }
