@@ -20,9 +20,7 @@ if [[ $1 = "setup" ]]; then
 
 elif [[ $1 == "split" ]]; then
     cd qa/integration
-    glob1=(specs/*spec.rb)
-    glob2=(specs/**/*spec.rb)
-    all_specs=("${glob1[@]}" "${glob2[@]}")
+    all_specs=(specs/**/*spec.rb)
 
     specs0=${all_specs[@]::$((${#all_specs[@]} / 2 ))}
     specs1=${all_specs[@]:$((${#all_specs[@]} / 2 ))}
