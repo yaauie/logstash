@@ -22,8 +22,14 @@ elif [[ $1 == "split" ]]; then
     cd qa/integration
     all_specs=(specs/**/*spec.rb)
 
-    specs0=${all_specs[@]::$((${#all_specs[@]} / 2 ))}
-    specs1=${all_specs[@]:$((${#all_specs[@]} / 2 ))}
+    # pct_first % of specs will run in split 1,
+    # and the remainder will run in split 2.
+    # increase this number if split 1 consistently finishes faster than split 2, or
+    # decrease this number if split 1 consistently finishes slower than split 2, or
+    pct_first = 50
+
+    specs0=${all_specs[@]::$((${#all_specs[@]} * ${pct_first} / 100 ))}
+    specs1=${all_specs[@]:$((${#all_specs[@]} * ${pct_first} / 100 ))}
     cd ../..
     if [[ $2 == 0 ]]; then
        echo "Running the first half of integration specs: $specs0"
