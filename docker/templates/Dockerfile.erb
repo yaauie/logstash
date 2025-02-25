@@ -1,5 +1,5 @@
 # This Dockerfile was generated from templates/Dockerfile.erb
-<%# image_flavor 'full', oss', 'wolfi' -%>
+<%# image_flavor 'full', oss', 'wolfi', 'observability-sre' -%>
 <% if local_artifacts == 'false' -%>
   <%   url_root = 'https://artifacts.elastic.co/downloads/logstash' -%>
 <% else -%>
@@ -7,6 +7,9 @@
 <% end -%>
 <% if image_flavor == 'oss' -%>
   <%   tarball = "logstash-oss-#{elastic_version}-linux-#{arch}.tar.gz" -%>
+  <%   license = 'Apache 2.0' -%>
+<% elsif image_flavor == 'observability-sre' -%>
+  <%   tarball = "logstash-observability-sre-#{elastic_version}-linux-#{arch}.tar.gz" -%>
   <%   license = 'Apache 2.0' -%>
 <% else -%>
   <%   tarball = "logstash-#{elastic_version}-linux-#{arch}.tar.gz" -%>
@@ -48,7 +51,7 @@ COPY --from=builder-env2yaml /tmp/go/src/env2yaml/env2yaml /usr/local/bin/env2ya
 COPY config/pipelines.yml config/log4j2.properties config/log4j2.file.properties config/
 <% if image_flavor == 'oss' -%>
 COPY config/logstash-oss.yml config/logstash.yml
-<% else -%><%# 'full', 'wolfi' -%>
+<% else -%><%# 'full', 'wolfi', 'observability-sre' -%>
 COPY config/logstash-full.yml config/logstash.yml
 <% end -%>
 COPY pipeline/default.conf pipeline/logstash.conf
@@ -63,7 +66,7 @@ RUN for iter in {1..10}; do \
   <%= package_manager %> install -y openssl && \
   <%= package_manager %> install -y which shadow-utils && \
   <%= package_manager %> clean all && \
-<% else -%><%# 'wolfi' -%>
+<% else -%><%# 'wolfi', 'observability-sre' -%>
   <%= package_manager %> add --no-cache curl bash openssl && \
 <% end -%>
   exit_code=0 && break || \
@@ -80,7 +83,7 @@ RUN groupadd --gid 1000 logstash && \
   --home "/usr/share/logstash" \
   --no-create-home \
   logstash && \
-<% else -%><%# 'wolfi' -%>
+<% else -%><%# 'wolfi', 'observability-sre' -%>
 RUN addgroup -g 1000 logstash && \
   adduser -u 1000 -G logstash \
   --disabled-password \
