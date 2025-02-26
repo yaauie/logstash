@@ -92,7 +92,7 @@ class LogStash::PluginManager::Update < LogStash::PluginManager::Command
                                          rubygems_source: gemfile.gemset.sources,
                                          local: local?,
                                          conservative: conservative?
-      output << LogStash::Bundler.genericize_platform unless output.nil?
+      output << LogStash::Bundler.standardize_platforms unless output.nil?
     end
 
     # We currently dont removed unused gems from the logstash installation

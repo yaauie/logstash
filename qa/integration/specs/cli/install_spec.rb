@@ -34,6 +34,9 @@ INSTALL_SUCCESS_RE = /IB?nstall successful/
 INSTALLATION_SUCCESS_RE = /IB?nstallation successful/
 
 describe "CLI > logstash-plugin install" do
+
+  let(:expected_lock_platforms) { LogstashService::EXPECTED_LOCK_PLATFORMS }
+
   before(:all) do
     @fixture = Fixture.new(__FILE__)
     @logstash = @fixture.get_service("logstash")
@@ -76,6 +79,7 @@ describe "CLI > logstash-plugin install" do
           expect(installed.stderr_and_stdout).to match(/logstash-output-secret/)
 
           expect(gem_in_lock_file?(/gemoji/, @logstash.lock_file)).to be_truthy
+          expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
         end
       end
     else
@@ -91,6 +95,7 @@ describe "CLI > logstash-plugin install" do
           expect(installed.stderr_and_stdout).to match(/logstash-output-secret/)
 
           expect(gem_in_lock_file?(/gemoji/, @logstash.lock_file)).to be_truthy
+          expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
         end
       end
     end
@@ -140,6 +145,8 @@ describe "CLI > logstash-plugin install" do
 
         installed = @logstash_plugin.list(plugin_name)
         expect(installed.stderr_and_stdout).to match(/#{plugin_name}/)
+
+        expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
       end
 
       it "successfully installs the plugin with debug enabled" do
@@ -150,6 +157,8 @@ describe "CLI > logstash-plugin install" do
 
         installed = @logstash_plugin.list(plugin_name)
         expect(installed.stderr_and_stdout).to match(/#{plugin_name}/)
+
+        expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
       end
     end
   end

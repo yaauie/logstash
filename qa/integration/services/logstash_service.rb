@@ -34,6 +34,11 @@ class LogstashService < Service
   LS_CONFIG_FILE = File.join("config", "logstash.yml")
   SETTINGS_CLI_FLAG = "--path.settings"
 
+  # should sync with ::LogStash::Bundler::LOCK_PLATFORMS, but we avoid
+  # including it here to avoid polluting the integration spec's process
+  # with patched bundler
+  EXPECTED_LOCK_PLATFORMS = %w(java universal-java-17 universal-java-21).map { |platform_spec| Gem::Platform.new(platform_spec) }
+
   STDIN_CONFIG = "input {stdin {}} output { }"
   RETRY_ATTEMPTS = 60
 
@@ -290,6 +295,10 @@ class LogstashService < Service
 
   def lock_file
     File.join(@logstash_home, "Gemfile.lock")
+  end
+
+  def parsed_lockfile
+    ::Bundler::LockfileParser::new(File.read(lock_file))
   end
 
   def run_cmd(cmd_args, change_dir = true, environment = {})

@@ -92,10 +92,9 @@ module Bundler
 
           builder.eval_gemfile("bundler file", gemfile.generate())
           definition = builder.to_definition(lockfile_path, {})
-          LogStash::Bundler.specific_platforms(definition.platforms).each do |specific_platform|
-            definition.remove_platform(specific_platform)
+          LogStash::Bundler::LOCK_PLATFORMS.map do |platform|
+            definition.add_platform(Gem::Platform.new(platform))
           end
-          definition.add_platform(Gem::Platform.new('java'))
           definition.lock(lockfile_path)
           gemfile.save
         rescue => e

@@ -24,8 +24,11 @@ require "logstash/devutils/rspec/spec_helper"
 describe "CLI > logstash-plugin remove" do
   before(:each) do
     @fixture = Fixture.new(__FILE__)
-    @logstash_plugin = @fixture.get_service("logstash").plugin_cli
+    @logstash = @fixture.get_service("logstash")
+    @logstash_plugin = @logstash.plugin_cli
   end
+
+  let(:expected_lock_platforms) { LogstashService::EXPECTED_LOCK_PLATFORMS }
 
     if RbConfig::CONFIG["host_os"] == "linux"
       context "without internet connection (linux seccomp wrapper)" do
@@ -52,6 +55,8 @@ describe "CLI > logstash-plugin remove" do
             expect(execute.exit_code).to eq(0)
             expect(execute.stderr_and_stdout).to match(/Successfully removed #{test_plugin}/)
 
+            expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
+
             presence_check = @logstash_plugin.list(test_plugin)
             expect(presence_check.exit_code).to eq(1)
             expect(presence_check.stderr_and_stdout).to match(/ERROR: No plugins found/)
@@ -66,6 +71,8 @@ describe "CLI > logstash-plugin remove" do
             expect(execute.stderr_and_stdout).to match(/Failed to remove "logstash-codec-json"/)
             expect(execute.stderr_and_stdout).to match(/logstash-integration-kafka/) # one of the dependency
             expect(execute.stderr_and_stdout).to match(/logstash-output-udp/) # one of the dependency
+
+            expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
 
             presence_check = @logstash_plugin.list("logstash-codec-json")
 
@@ -88,6 +95,8 @@ describe "CLI > logstash-plugin remove" do
           expect(execute.exit_code).to eq(0)
           expect(execute.stderr_and_stdout).to match(/Successfully removed #{test_plugin}/)
 
+          expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
+
           presence_check = @logstash_plugin.list(test_plugin)
           expect(presence_check.exit_code).to eq(1)
           expect(presence_check.stderr_and_stdout).to match(/ERROR: No plugins found/)
@@ -102,6 +111,8 @@ describe "CLI > logstash-plugin remove" do
           expect(execute.stderr_and_stdout).to match(/Failed to remove "logstash-codec-json"/)
           expect(execute.stderr_and_stdout).to match(/logstash-integration-kafka/) # one of the dependency
           expect(execute.stderr_and_stdout).to match(/logstash-output-udp/) # one of the dependency
+
+          expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
 
           presence_check = @logstash_plugin.list("logstash-codec-json")
 
@@ -157,6 +168,8 @@ describe "CLI > logstash-plugin remove" do
             expect(execute.stderr_and_stdout).to include("* logstash-filter-four_depends_on_one_and_three") # one of the dependency
             expect(execute.stderr_and_stdout).to include("No plugins were removed.")
 
+            expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
+
             aggregate_failures("list plugins") do
               presence_check = @logstash_plugin.list
               expect(presence_check.exit_code).to eq(0)
@@ -183,6 +196,8 @@ describe "CLI > logstash-plugin remove" do
             expect(execute.stderr_and_stdout).to include("* logstash-filter-four_depends_on_one_and_three") # one of the dependency
             expect(execute.stderr_and_stdout).to include("* logstash-filter-two_depends_on_one") # one of the dependency
             expect(execute.stderr_and_stdout).to include("No plugins were removed.")
+
+            expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
 
             aggregate_failures("list plugins") do
               presence_check = @logstash_plugin.list
@@ -216,6 +231,8 @@ describe "CLI > logstash-plugin remove" do
               plugins_to_remove.each do |gem_name|
                 expect(execute.stderr_and_stdout).to include("Successfully removed #{gem_name}")
               end
+
+              expect(@logstash.parsed_lockfile.platforms).to match_array(expected_lock_platforms)
             end
 
             aggregate_failures("list plugins") do

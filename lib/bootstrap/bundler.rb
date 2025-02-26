@@ -22,6 +22,12 @@ module LogStash
   module Bundler
     extend self
 
+    LOCK_PLATFORMS = %w(
+      java
+      universal-java-17
+      universal-java-21
+    ).map(&:freeze).freeze
+
     def patch!
       # Patch to prevent Bundler to save a .bundle/config file in the root
       # of the application
@@ -199,12 +205,8 @@ module LogStash
       platforms.find_all {|plat| plat.is_a?(::Gem::Platform) && plat.os == 'java' && !plat.cpu.nil?}
     end
 
-    def genericize_platform
-      output = LogStash::Bundler.invoke!({:add_platform => 'java'})
-      specific_platforms.each do |platform|
-        output << LogStash::Bundler.invoke!({:remove_platform => platform})
-      end
-      output
+    def standardize_platforms
+      LogStash::Bundler.invoke!({:add_platform => LOCK_PLATFORMS})
     end
 
     def debug?
@@ -277,12 +279,10 @@ module LogStash
         arguments << "--all" if options[:all]
       elsif options[:add_platform]
         arguments << "lock"
-        arguments << "--add_platform"
-        arguments << options[:add_platform]
-      elsif options[:remove_platform]
-        arguments << "lock"
-        arguments << "--remove_platform"
-        arguments << options[:remove_platform]
+        arguments << "--add-platform"
+        Array(options[:add_platform]).each do |platform_to_add|
+          arguments << platform_to_add
+        end
       end
 
       arguments << "--verbose" if options[:verbose]
