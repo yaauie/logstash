@@ -33,4 +33,35 @@ require "rspec/core"
 
 RSpec.clear_examples
 
+class ExampleTimer
+  TIMINGS_FILE=File.expand_path("timings.tsv", __dir__)
+
+  def initialize
+    @timings = Hash.new(0)
+  end
+
+  def record(example)
+    start_time = Time.now
+    example.run
+  ensure
+    @timings[Pathname.new(example.file_path).cleanpath.to_s] += (Time.now - start_time)
+  end
+
+  def write
+    @timings.each do |filename, time_seconds|
+      $stderr.puts("[TIME] #{filename} (actual: #{time_seconds.ceil})")
+    end
+  end
+end
+timer = ExampleTimer.new
+
+RSpec.configure do |configuration|
+  configuration.around(:context) do |example_group|
+    timer.record(example_group)
+  end
+  configuration.after(:suite) do
+    timer.write
+  end
+end
+
 return RSpec::Core::Runner.run($JUNIT_ARGV).to_i

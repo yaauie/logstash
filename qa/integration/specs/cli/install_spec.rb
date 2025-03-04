@@ -33,6 +33,7 @@ end
 INSTALL_SUCCESS_RE = /IB?nstall successful/
 INSTALLATION_SUCCESS_RE = /IB?nstallation successful/
 
+# SPLIT_ESTIMATE: 60
 describe "CLI > logstash-plugin install" do
   before(:all) do
     @fixture = Fixture.new(__FILE__)

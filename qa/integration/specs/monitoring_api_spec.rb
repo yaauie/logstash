@@ -22,6 +22,8 @@ require_relative '../services/logstash_service'
 require "logstash/devutils/rspec/spec_helper"
 require "stud/try"
 
+
+# SPLIT_ESTIMATE: 160
 describe "Test Monitoring API" do
   before(:each) do |example|
     $stderr.puts("STARTING: #{example.full_description} (#{example.location})")

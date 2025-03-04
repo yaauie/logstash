@@ -22,6 +22,7 @@ require_relative '../framework/helpers'
 require "logstash/devutils/rspec/spec_helper"
 require "yaml"
 
+# SPLIT_ESTIMATE: 70
 describe "Test Logstash instance whose default settings are overridden" do
   before(:all) {
     @fixture = Fixture.new(__FILE__)

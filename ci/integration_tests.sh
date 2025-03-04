@@ -35,17 +35,45 @@ elif [[ $1 == "split" ]]; then
       echo "Error, selected_partition(${selected_partition}) must be greater 0 and less than partition_count(${partition_count})"; exit 1
     fi
 
-    # round-robbin select those in our selected partition
-    partition_specs=()
+    # index and sort the specs by their estimated cost, which is in a comment including SPLIT_ESTIMATE: INTEGER
+    # the result is an array of filename-tab-cost entries with default values and the most expensive entries first.
+    indexed=()
+    default_cost=20
+    cost_index="$(cat qa/integration/timings.tsv || true)"
     for index in "${!all_specs[@]}"; do
-      partition="$(( $index % $partition_count ))"
+      file="${all_specs[$index]}"
+      cost="$(awk -F':' '{ if (match($1,"SPLIT_ESTIMATE")) { print sprintf("%d", $2); exit } }' "qa/integration/${file}")"
+      indexed+=("${file}"$'\t'"${cost:-${default_cost}}")
+    done
+    IFS=$'\n' indexed=($(printf "%s\n" "${indexed[@]}" | sort --numeric-sort -k2rn -k1)); unset IFS
+
+    # iterate over them, assigning each to the least-allocated partition
+    selected_specs=()
+    partition_costs=()
+    for index in "${!indexed[@]}"; do
+      # split entry into columns
+      IFS=$'\t' read -r file cost <<< "${indexed[$index]}"
+
+      # find the partition with the current lowest cost
+      partition=0
+      for i in $(seq 1 $(( partition_count - 1 ))); do
+        if (( "${partition_costs[$i]:-0}" < "${partition_costs[${partition}]:-0}" )); then
+          partition=$i
+        fi
+      done
+
+      # allocate the cost of this file to its partition
+      partition_costs[$partition]=$(( partition_costs[$partition] + $cost ))
+
+      # add the file to the selected_specs IFF it is our selected partition
       if (( $partition == $selected_partition )); then
-        partition_specs+=("${all_specs[$index]}")
+        selected_specs+=("${file}")
+        >&2 echo "[PICK] ${file} (estimate: ${cost})"
       fi
     done
 
-    echo "Running integration specs split[${selected_partition}] of ${partition_count}: ${partition_specs[*]}"
-    ./gradlew runIntegrationTests -PrubyIntegrationSpecs="${partition_specs[*]}" --console=plain
+    echo "Running integration specs split[${selected_partition}] of ${partition_count} (estimate: ${partition_costs[$selected_partition]}): ${selected_specs[*]}"
+    ./gradlew runIntegrationTests -PrubyIntegrationSpecs="${selected_specs[*]}" --console=plain
 
 elif [[ !  -z  $@  ]]; then
     echo "Running integration tests 'rspec $@'"
