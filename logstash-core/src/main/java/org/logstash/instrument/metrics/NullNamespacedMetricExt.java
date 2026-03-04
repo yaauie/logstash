@@ -72,7 +72,7 @@ public final class NullNamespacedMetricExt extends AbstractNamespacedMetricExt {
     }
 
     @Override
-    public Metric asApiMetric() {
+    public MetricNode asApiMetric() {
         return NamespacedMetricImpl.getNullMetric();
     }
 

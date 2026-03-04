@@ -20,13 +20,13 @@
 
 package org.logstash.plugins;
 
-import co.elastic.logstash.api.Metric;
-import co.elastic.logstash.api.NamespacedMetric;
 import org.jruby.RubyArray;
 import org.jruby.RubyString;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.logstash.instrument.metrics.AbstractMetricExt;
+import org.logstash.instrument.metrics.NamespacedMetric;
+import org.logstash.instrument.metrics.MetricNode;
 
 import java.util.stream.Stream;
 
@@ -34,7 +34,7 @@ import java.util.stream.Stream;
  * Wraps a {@link AbstractMetricExt} and represents a "root metric" that must be
  * namespaced in order to write metrics to.
  */
-public class RootMetricImpl implements Metric {
+public class RootMetricImpl implements MetricNode {
     private final ThreadContext threadContext;
     private final AbstractMetricExt metrics;
 

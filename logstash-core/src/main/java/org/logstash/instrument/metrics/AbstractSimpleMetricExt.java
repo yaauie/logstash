@@ -40,7 +40,7 @@ public abstract class AbstractSimpleMetricExt extends AbstractMetricExt {
     }
 
     @Override
-    public Metric asApiMetric() {
+    public MetricNode asApiMetric() {
         return new RootMetricImpl(getRuntime().getCurrentContext(), this);
     }
 

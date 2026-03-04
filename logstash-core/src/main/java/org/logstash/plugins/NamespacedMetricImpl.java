@@ -21,8 +21,6 @@
 package org.logstash.plugins;
 
 import co.elastic.logstash.api.CounterMetric;
-import co.elastic.logstash.api.Metric;
-import co.elastic.logstash.api.NamespacedMetric;
 import co.elastic.logstash.api.UserMetric;
 import org.jruby.Ruby;
 import org.jruby.RubyArray;
@@ -32,9 +30,7 @@ import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.logstash.RubyUtil;
 import org.logstash.Rubyfier;
-import org.logstash.instrument.metrics.AbstractNamespacedMetricExt;
-import org.logstash.instrument.metrics.NullMetricExt;
-import org.logstash.instrument.metrics.NullNamespacedMetricExt;
+import org.logstash.instrument.metrics.*;
 import org.logstash.instrument.metrics.timer.TimerMetric;
 
 import java.util.ArrayList;
@@ -88,7 +84,7 @@ public class NamespacedMetricImpl implements NamespacedMetric {
     }
 
     @Override
-    public co.elastic.logstash.api.TimerMetric timer(final String metric) {
+    public TimerMetric timer(final String metric) {
         return TimerMetric.fromRubyBase(metrics, threadContext.getRuntime().newString(metric).intern());
     }
 
@@ -148,7 +144,7 @@ public class NamespacedMetricImpl implements NamespacedMetric {
     }
 
     @Override
-    public Metric root() {
+    public MetricNode root() {
         return new RootMetricImpl(this.threadContext, this.metrics.root(this.threadContext));
     }
 

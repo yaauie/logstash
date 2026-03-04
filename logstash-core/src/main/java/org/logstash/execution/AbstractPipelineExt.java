@@ -89,12 +89,12 @@ import org.logstash.instrument.metrics.AbstractMetricExt;
 import org.logstash.instrument.metrics.AbstractNamespacedMetricExt;
 import org.logstash.instrument.metrics.FlowMetric;
 import org.logstash.instrument.metrics.Metric;
+import org.logstash.instrument.metrics.MetricNode;
 import org.logstash.instrument.metrics.MetricType;
 import org.logstash.instrument.metrics.NullMetricExt;
 import org.logstash.instrument.metrics.UpScaledMetric;
-import org.logstash.instrument.metrics.gauge.TextGauge;
-import org.logstash.instrument.metrics.timer.TimerMetric;
 import org.logstash.instrument.metrics.UptimeMetric;
+import org.logstash.instrument.metrics.timer.TimerMetric;
 import org.logstash.instrument.metrics.counter.LongCounter;
 import org.logstash.instrument.metrics.gauge.LazyDelegatingGauge;
 import org.logstash.instrument.metrics.gauge.NumberGauge;
@@ -308,6 +308,13 @@ public class AbstractPipelineExt extends RubyBasicObject {
             throw new IllegalArgumentException(iirex);
         }
         return this;
+    }
+
+    private void registerMetricCallbacks() {
+        final MetricNode metricNode = metric.asApiMetric();
+
+        final TimerMetric timer = metricNode.namespace("this", "that").timer("foo");
+        timer.getValue(); // because this is a `org.logstash.instrument.metrics.timer.TimerMetric`, it has a getValue method.
     }
 
     /**

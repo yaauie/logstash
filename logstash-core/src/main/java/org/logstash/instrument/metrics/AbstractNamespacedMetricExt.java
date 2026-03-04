@@ -112,7 +112,7 @@ public abstract class AbstractNamespacedMetricExt extends AbstractMetricExt {
     protected abstract IRubyObject doDecrement(ThreadContext context, IRubyObject[] args);
 
     @Override
-    public Metric asApiMetric() {
+    public MetricNode asApiMetric() {
         return new NamespacedMetricImpl(getRuntime().getCurrentContext(), this);
     }
 
