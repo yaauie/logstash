@@ -19,9 +19,62 @@ require "logstash/pipeline_action/base"
 require "logstash/java_pipeline"
 
 module LogStash module PipelineAction
-  class Recover < Create
+  class Recover < Base
+    include LogStash::Util::Loggable
+
+    def initialize(pipeline_config, metric)
+      @pipeline_config = pipeline_config
+      @metric = metric
+    end
+
+    def pipeline_id
+      @pipeline_config.pipeline_id.to_sym
+    end
+
     def to_s
       "PipelineAction::Recover<#{pipeline_id}>"
     end
+
+    def execute(agent, pipelines_registry)
+      old_pipeline = pipelines_registry.get_pipeline(pipeline_id)
+
+      # guard with descriptive errors
+      if old_pipeline.nil?
+        return new_failed_action("pipeline does not exist")
+      elsif old_pipeline.running? || !old_pipeline.crashed?
+        return new_failed_action("existing pipeline is not in a settled crashed state")
+      elsif !old_pipeline.configured_as_recoverable?
+        return new_failed_action("existing pipeline not configured to be recoverable (see: `pipeline.recoverable`)")
+      elsif (nrp = old_pipeline.non_reloadable_plugins) && !nrp.empty?
+        return new_failed_action("existing pipeline has non-reloadable plugins: #{nrp.map(&:readable_spec).join(', ')}")
+      end
+
+      begin
+        pipeline_validator = AbstractPipeline.new(@pipeline_config, nil, logger, nil)
+      rescue => e
+        return ConvergeResult::FailedAction.from_exception(e)
+      end
+
+      if !pipeline_validator.reloadable?
+        return new_failed_action("Cannot recover pipeline, because the new pipeline is not reloadable")
+      end
+
+      logger.info("Recovering pipeline", "pipeline.id" => pipeline_id)
+
+      success = pipelines_registry.reload_pipeline(pipeline_id) do
+        # important NOT to explicitly return from block here
+        # the block must emit a success boolean value
+
+        # Then create a new pipeline
+        new_pipeline = LogStash::JavaPipeline.new(@pipeline_config, @metric, agent)
+        success = new_pipeline.start # block until the pipeline is correctly started or crashed
+
+        # return success and new_pipeline to registry reload_pipeline
+        [success, new_pipeline]
+      end
+
+      LogStash::ConvergeResult::ActionResult.create(self, success)
+    end
+
   end
 end; end
